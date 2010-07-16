@@ -149,7 +149,7 @@ code_change(_OldVsn, State, _Extra) ->
 start(Host, Opts) ->
 	?INFO_MSG("mod_content_filter starting on ~p...", [Host]),
 	ejabberd_hooks:add(filter_packet, global, ?MODULE, filter_packet, 50),
-	BindingFile = proplists:get_value(rule_bindings, Opts, []),
+	BindingFile = proplists:get_value(predicate_bindings, Opts, []),
 	{ok, Bindings} = get_bindings(BindingFile),
 	start_link(Host, Bindings).
 
