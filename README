@@ -1,0 +1,35 @@
+Ejabberd module for message content filtering.
+
+What it is for?
+Content filter module is designed for filtering content of messages according to user-defined criteria.
+
+How does it work?
+The user creates condition records in MySQL database associated with ejabberd's virtual host. The module reads the condition records upon module start/restart. All incoming messages are analyzed against each of the condition record. If any of such checks is positive, the message gets dropped.
+
+What is a condition record?
+Condition consists of predicate and argument string. For example, {"contains", "hell"} means "message contains 'hell' ". The exact meaning of condition is determined by condition binding code (see below).
+
+How to add/remove/change a condition record?
+By using MySQL's INSERT/DELETE/UPDATE statements. For example, below code adds 2 condition records:
+
+INSERT INTO TABLE criteria (predicate, arguments) VALUES ("contains", "site sucks"), ("contains_any", "bad_word1, bad_word2");
+
+NOTE: the module currently only reads MySQL database upon restart. We can discuss other strategies going forward.
+What condition predicates are available?
+Out of the box there are "contains", "equals", "contains_all", "contains_any" predicates. It's possible to add/remove/change implementations and/or names of predicates by editing the "predicate bindings" configuration file (see next paragraph).
+
+What are predicate bindings?
+The external file that contains bindings of predicates to their implementations. The easiest way to explain is to show the fragment of that file describing "contains" predicate:
+
+{"contains", fun(Msg, Phrase) ->
+                string:str(Msg, Phrase) > 0
+              end
+ }
+
+That is, each entry in the bindings contains name of predicate and its implementation in Erlang. The bindings are read every time the module is restarted. Hence, it's possible to add/remove/change name and implementation of predicates in runtime, without changing and compiling the module itself.
+
+How do I specify which predicate bindings to use?
+The mod_content_filter expects predicate bindings file to be in startup arguments, like so:
+
+{mod_content_filter, [{predicate_bindings, "put_location_of_binding_file_here"}]}.
+
