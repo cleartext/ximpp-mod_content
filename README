@@ -12,7 +12,7 @@ Condition consists of predicate and argument string. For example, {"contains", "
 How to add/remove/change a condition record?
 By using MySQL's INSERT/DELETE/UPDATE statements. For example, below code adds 2 condition records:
 
-INSERT INTO TABLE criteria (predicate, arguments) VALUES ("contains", "site sucks"), ("contains_any", "bad_word1, bad_word2");
+INSERT INTO TABLE criteria (host, predicate, arguments) VALUES ("myhost.com", "contains", "site sucks"), ("myhost.com", "contains_any", "bad_word1, bad_word2");
 
 NOTE: the module currently only reads MySQL database upon restart. We can discuss other strategies going forward.
 What condition predicates are available?

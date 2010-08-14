@@ -150,7 +150,15 @@ start(Host, Opts) ->
 	ejabberd_hooks:add(filter_packet, global, ?MODULE, filter_packet, 50),
 	BindingFile = proplists:get_value(predicate_bindings, Opts, []),
 	{ok, Bindings} = get_bindings(BindingFile),
-	start_link(Host, Bindings).
+	start_link(Host, Bindings),
+	%% Start WebRoot service
+	WebRootURL = proplists:get_value(webroot_url, none),
+	WebRootUser = proplists:get_value(webroot_user, none),
+	WebRootPasswd = proplists:get_value(webroot_password, none),
+	case WebRootURL of
+		none -> ok;
+		_ -> webroot_service:start_link(Host, WebRootURL, WebRootUser, WebRootPasswd)
+	end.
 
 stop(_Host) ->
 	ejabberd_hooks:delete(filter_packet, global, ?MODULE, filter_packet, 50).
@@ -162,7 +170,7 @@ get_filter_name(Host) ->
 	A = atom_to_list(?MODULE),
 	list_to_atom(A ++ "_" ++ Host).
 
-filter_packet({From, To,  {xmlelement, Name, Attrs, _Els} = Packet}) when Name == "message" ->
+filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name == "message" ->
 	Host = exmpp_jid:prep_domain_as_list(To),
 	case isCensoredMsg(Host, Packet)  of
 		true ->
