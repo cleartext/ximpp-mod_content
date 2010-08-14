@@ -21,7 +21,7 @@ Out of the box there are "contains", "equals", "contains_all", "contains_any" pr
 What are predicate bindings?
 The external file that contains bindings of predicates to their implementations. The easiest way to explain is to show the fragment of that file describing "contains" predicate:
 
-{"contains", fun(Msg, Phrase) ->
+{"contains", fun(Msg, Phrase, _Host) ->
                 string:str(Msg, Phrase) > 0
               end
  }

@@ -5,7 +5,7 @@
 %%%
 %%% Created : 14 Jun 2009 by Boris Okner <b.okner@rogers.com>
 %%%-------------------------------------------------------------------
--module(mod_content_filter).
+-module(mod_url_filter).
 
 -behaviour(gen_server).
 -behavior(gen_mod).
@@ -34,9 +34,10 @@
 %% Description: Starts the server
 %%--------------------------------------------------------------------
 start_link(Host, Bindings) ->
-	ContentFilterName = get_filter_name(Host),
-	gen_server:start_link({local, ContentFilterName}, ?MODULE, [Host, Bindings], []).
+	gen_server:start_link({local, ?MODULE}, ?MODULE, [Host, Bindings], []).
 
+stop() ->
+	gen_server:cast(?MODULE, stop).
 
 %%====================================================================
 %% gen_server callbacks
@@ -51,14 +52,14 @@ start_link(Host, Bindings) ->
 %%--------------------------------------------------------------------
 init([Host, Bindings]) ->
 	%% Read existing criteria from database
-	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (host text, predicate text, arguments text)"),
+	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (predicate text, arguments text)"),
 	
-	SQL = "select predicate, arguments from criteria where host=" ++ Host,
+	SQL = "select predicate, arguments from criteria",
 	CompiledCriteria = case catch(ejabberd_odbc:sql_query(Host, SQL)) of
 											 {selected, _Header, Rs} when is_list(Rs) ->
 												 lists:foldl(
 													 fun({P, Args}, L) ->
-																R = compile(P, Args, Bindings, Host),
+																R = compile(P, Args, Bindings),
 																case R of
 																	{ok, C} ->
 																		[{{P, Args}, C} | L];
@@ -83,8 +84,8 @@ init([Host, Bindings]) ->
 handle_call(get_criteria, _From, State) ->
 	{reply, State#state.criteria, State};
 
-handle_call({add_criterion, PredicateName, Args}, _From, #state{criteria = Criteria, bindings = Bindings, host = Host} = State) ->
-	case compile(PredicateName, Args, Bindings, Host) of
+handle_call({add_criterion, PredicateName, Args}, _From, #state{criteria = Criteria, bindings = Bindings} = State) ->
+	case compile(PredicateName, Args, Bindings) of
 		{ok, CompiledCriterion} ->
 			Key = {PredicateName, Args},
 			{reply, ok, State#state{criteria = lists:keystore(Key, 1, Criteria, {Key, CompiledCriterion})}};
@@ -153,18 +154,16 @@ start(Host, Opts) ->
 	start_link(Host, Bindings).
 
 stop(_Host) ->
-	ejabberd_hooks:delete(filter_packet, global, ?MODULE, filter_packet, 50).
+	ejabberd_hooks:delete(filter_packet, global, ?MODULE, filter_packet, 50),
+	stop().
 
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-get_filter_name(Host) ->
-	A = atom_to_list(?MODULE),
-	list_to_atom(A ++ "_" ++ Host).
 
 filter_packet({From, To,  {xmlelement, Name, Attrs, _Els} = Packet}) when Name == "message" ->
-	Host = exmpp_jid:prep_domain_as_list(To),
-	case isCensoredMsg(Host, Packet)  of
+	Criteria = getCriteria(),
+	case isCensoredMsg(Packet, Criteria)  of
 		true ->
 			%%{From, To, {xmlelement, Name, [{"flag", "censored"} | Attrs], Els}};
 			?INFO_MSG("Dropped by content filter:~p", [Packet]),
@@ -177,25 +176,24 @@ filter_packet(P) ->
 	P.
 
 
-isCensoredMsg(Host, Packet) ->
-	Criteria = getCriteria(Host),
+isCensoredMsg(Packet, Criteria) ->
 	MsgBody = xml:get_subtag_cdata(Packet ,"body"),
-	lists:any(fun({_Raw, CrFun}) -> CrFun(MsgBody, Host) end, Criteria).
+	lists:any(fun({_Raw, CrFun}) -> CrFun(MsgBody) end, Criteria).
 
 
-getCriteria(Host) ->
-	gen_server:call(get_filter_name(Host), get_criteria).
+getCriteria() ->
+	gen_server:call(?MODULE, get_criteria).
 
 
 
 %% Criterion compilation.
 %% The result of compilation is a function that could be directly applied to the packet's message body
 %% Bindings is a list of {PredicateName, Fun}, where Fun is fun(Message, Args).
-compile(PredicateName, Args, Bindings, Host) ->
+compile(PredicateName, Args, Bindings) ->
 	case lists:keysearch(PredicateName, 1, Bindings) of
 		{value, {PName, Fun}} ->
 			io:format("Compile:~p, fun:~p~n", [PName, Fun]),
-			{ok, fun(Msg) -> erlang:apply(Fun, [Msg, Args, Host]) end};
+			{ok, fun(Msg) -> erlang:apply(Fun, [Msg, Args]) end};
 		_ ->
 			{error, {predicate_not_supported, PredicateName}}
 	end.
