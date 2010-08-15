@@ -66,7 +66,7 @@ parse_response(Response) ->
 %% Returns list of URL info elements.
 %% Each info element structured as [{"id", Id}, {"reputation", R}, {"url_category", C}]
 parse_json(Json) ->
-	Struct = mochijson:decode(Json),
+	Struct = json_utils:decode(Json),
 	{struct, Elements} = Struct,
 	{array, URLElems} = proplists:get_value("urls", Elements),
 	lists:map(fun(E) -> {struct, Fields} = E, Fields end, URLElems).
