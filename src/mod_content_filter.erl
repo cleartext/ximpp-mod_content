@@ -11,7 +11,7 @@
 -behavior(gen_mod).
 
 -export([start/2, stop/1, filter_packet/1]).
-
+-export([test/0]).
 
 %% API
 
@@ -53,17 +53,17 @@ init([Host, Bindings]) ->
 	%% Read existing criteria from database
 	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (host text, predicate text, arguments text)"),
 	
-	SQL = "select predicate, arguments from criteria where host=" ++ Host,
+	SQL = "select predicate, arguments from criteria where host='" ++ Host ++ "'",
 	CompiledCriteria = case catch(ejabberd_odbc:sql_query(Host, SQL)) of
 											 {selected, _Header, Rs} when is_list(Rs) ->
 												 lists:foldl(
 													 fun({P, Args}, L) ->
 																R = compile(P, Args, Bindings, Host),
-																case R of
-																	{ok, C} ->
-																		[{{P, Args}, C} | L];
-																	{error, _} ->
-																		L
+																case R of																	
+																	{ok, C} ->																		
+																		[{{P, Args}, C} | L];																	
+																	{error, _} ->																		
+																		L																
 																end
 													 end, [], Rs);
 											 _ ->
@@ -91,8 +91,6 @@ handle_call({add_criterion, PredicateName, Args}, _From, #state{criteria = Crite
 		Error ->
 			{reply, Error, State}
 	end;
-
-
 handle_call({remove_criterion, PredicateName, Args}, _From, #state{criteria = Criteria} = State) ->
 	{reply, ok, State#state{criteria = lists:keydelete({PredicateName, Args}, 1, Criteria)}};
 
@@ -144,23 +142,24 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% gen_mod behavior
 %%--------------------------------------------------------------------
-
 start(Host, Opts) ->
-	?INFO_MSG("mod_content_filter starting on ~p...", [Host]),
+	?DEBUG("mod_content_filter starting on ~p...", [Host]),
 	ejabberd_hooks:add(filter_packet, global, ?MODULE, filter_packet, 50),
 	BindingFile = proplists:get_value(predicate_bindings, Opts, []),
 	{ok, Bindings} = get_bindings(BindingFile),
 	start_link(Host, Bindings),
 	%% Start WebRoot service
-	WebRootURL = proplists:get_value(webroot_url, none),
-	WebRootUser = proplists:get_value(webroot_user, none),
-	WebRootPasswd = proplists:get_value(webroot_password, none),
+	WebRootURL = proplists:get_value(webroot_url, Opts, none),
+	WebRootUser = proplists:get_value(webroot_user, Opts, none),
+	WebRootPasswd = proplists:get_value(webroot_password, Opts, none),
 	case WebRootURL of
 		none -> ok;
 		_ -> webroot_service:start_link(Host, WebRootURL, WebRootUser, WebRootPasswd)
 	end.
 
-stop(_Host) ->
+stop(Host) ->
+	gen_server:cast(get_filter_name(Host), stop),
+	webroot_service:stop(Host),
 	ejabberd_hooks:delete(filter_packet, global, ?MODULE, filter_packet, 50).
 
 %%--------------------------------------------------------------------
@@ -171,7 +170,9 @@ get_filter_name(Host) ->
 	list_to_atom(A ++ "_" ++ Host).
 
 filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name == "message" ->
-	Host = exmpp_jid:prep_domain_as_list(To),
+	?DEBUG("Packet, From, To:~p~n, ~p~n, ~p~n", [Packet, From, To]),
+	
+	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, Host, _Res} = To,
 	case isCensoredMsg(Host, Packet)  of
 		true ->
 			%%{From, To, {xmlelement, Name, [{"flag", "censored"} | Attrs], Els}};
@@ -182,14 +183,17 @@ filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name 
 	end;
 
 filter_packet(P) ->
+	?DEBUG("Filter packet:~p~n", [P]),
 	P.
 
 
 isCensoredMsg(Host, Packet) ->
+	?DEBUG("Host:~p~n", [Host]),
+	?DEBUG("Packet:~p~n", [Packet]),
 	Criteria = getCriteria(Host),
 	MsgBody = xml:get_subtag_cdata(Packet ,"body"),
-	lists:any(fun({_Raw, CrFun}) -> CrFun(MsgBody, Host) end, Criteria).
-
+	?DEBUG("Msgbody:~p~n", [MsgBody]),
+	lists:any(fun({_Raw, CrFun}) -> CrFun(MsgBody) end, Criteria).
 
 getCriteria(Host) ->
 	gen_server:call(get_filter_name(Host), get_criteria).
@@ -202,7 +206,7 @@ getCriteria(Host) ->
 compile(PredicateName, Args, Bindings, Host) ->
 	case lists:keysearch(PredicateName, 1, Bindings) of
 		{value, {PName, Fun}} ->
-			io:format("Compile:~p, fun:~p~n", [PName, Fun]),
+			?DEBUG("Compile:~p, fun:~p~n", [PName, Fun]),
 			{ok, fun(Msg) -> erlang:apply(Fun, [Msg, Args, Host]) end};
 		_ ->
 			{error, {predicate_not_supported, PredicateName}}
@@ -216,3 +220,9 @@ get_bindings(File) ->
 	{value, Result, _} = erl_eval:exprs(Parsed, []),
 	{ok, Result}.
 
+test() ->
+	mod_content_filter:start("cleartext.com", [{predicate_bindings, "/opt/ejabberd-2.1.3/conf/cond_bindings.cfg"},
+																						 {webroot_url, "http://72.5.172.35:3128/wwss_url_checker"},
+																						 {webroot_user, "test@tagged.com"},
+																						 {webroot_password, "wrtest"}
+																						]).

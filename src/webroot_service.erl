@@ -13,7 +13,7 @@
 
 %% --------------------------------------------------------------------
 %% External exports
--export([start_link/4, get_scores/2]).
+-export([start_link/4, stop/1, get_scores/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -24,10 +24,13 @@
 %% External functions
 %% ====================================================================
 start_link(Host, ServiceUrl, User, Password) ->
-	gen_server:start({local, get_service_name(Host)}, [ServiceUrl, User, Password], []).
+        gen_server:start({local, get_service_name(Host)}, ?MODULE, [ServiceUrl, User, Password], []).
 
 get_scores(Host, URLs) ->
-	gen_server:call(get_service_name(Host), {get_scores, URLs}).
+        gen_server:call(get_service_name(Host), {get_scores, URLs}).
+
+stop(Host) ->
+        gen_server:cast(get_service_name(Host), stop).
 %% ====================================================================
 %% Server functions
 %% ====================================================================
@@ -46,7 +49,7 @@ init([ServiceUrl, User, Password]) ->
 %% --------------------------------------------------------------------
 %% Function: handle_call/3
 %% Description: Handling call messages
-%% Returns: {reply, Reply, State}          |
+%% Returns: {reply, Reply, State}   
 %%          {reply, Reply, State, Timeout} |
 %%          {noreply, State}               |
 %%          {noreply, State, Timeout}      |
@@ -68,6 +71,9 @@ handle_call(_Request, _From, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
+handle_cast(stop, State) ->
+    {stop, normal, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -96,10 +102,9 @@ terminate(_Reason, _State) ->
 %% --------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
 %% --------------------------------------------------------------------
 %%% Internal functions
 %% --------------------------------------------------------------------
 get_service_name(Host) ->
-	A = atom_to_list(?MODULE),
-	list_to_atom(A ++ "_" ++ Host).
+        A = atom_to_list(?MODULE),
+        list_to_atom(A ++ "_" ++ Host).
