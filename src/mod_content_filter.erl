@@ -173,13 +173,11 @@ filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name 
 	
 	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, Host, _Res} = To,
 	case inspect_message(Host, Packet)  of
-		true ->
+		drop ->
 			%%{From, To, {xmlelement, Name, [{"flag", "censored"} | Attrs], Els}};
 			?INFO_MSG("Dropped by content filter:~p", [Packet]),
 			drop;
-		false ->
-			{From, To, Packet};
-		{false, NewMsgBody} ->
+		{keep, NewMsgBody} ->
 			{From, To, replace_body(Packet, NewMsgBody)}
 	end;
 
