@@ -1,3 +1,35 @@
+%%-------------------------------------------------------------------
+%%% File    : content_utils.erl
+%%% Author  : Boris Okner <b.okner@rogers.com>
+%%% Description : Utility functions for content filtering
+%%% Created : 18 Aug 2010 by Boris Okner <b.okner@rogers.com>
+%%%-------------------------------------------------------------------
+
+-module(content_utils).
+
+%%
+%% Include files
+%%
+
+%%
+%% Exported Functions
+%%
+-export([block/3]).
+
+%%
+%% API Functions
+%%
+block(MessageBody, TextToBlock, BlockSymbol) when is_list(BlockSymbol) ->
+	block(MessageBody, TextToBlock, hd(BlockSymbol));
+
+block(MessageBody, TextToBlock, BlockSymbol) ->
+	BlockStr = string:chars(BlockSymbol, string:len(TextToBlock)),
+	{ok, NewBody, _N} = regexp:gsub(MessageBody, TextToBlock, BlockStr),
+	NewBody.
+%%
+%% Local Functions
+%%
+filters() ->
 	[{"contains", fun(Msg, Phrase, "drop", _Host) ->
 										 case string:str(Msg, Phrase) of
 											 0 -> 
@@ -22,7 +54,7 @@
 												 lists:all(fun(W) -> string:str(Msg, W) > 0 end, WordList);
 											(Msg, Words, "block", _Host) ->
 												WordList = string:tokens(Words, ";"),
-												NewMsg = lists:foldl(fun(W, M) -> content_utils:block(M, W, "*") end, Msg, WordList),
+												NewMsg = lists:foldl(fun(W) -> content_utils:block(Msg, W, "*") end, Msg, WordList),
 												{false, NewMsg}                	                  
 		end
 	 },
@@ -32,7 +64,7 @@
 												 lists:any(fun(W) -> string:str(Msg, W) > 0 end, WordList);
 											(Msg, Words, "block", _Host) ->
 												WordList = string:tokens(Words, ";"),
-												NewMsg = lists:foldl(fun(W, M) -> content_utils:block(M, W, "*") end, Msg, WordList),
+												NewMsg = lists:foldl(fun(W) -> content_utils:block(Msg, W, "*") end, Msg, WordList),
 												{false, NewMsg} 
 		end
 	 },
@@ -44,7 +76,7 @@
 											 case Action of 
 												 "drop" -> lists:any(fun(S) -> S >= T end, Scores);
 												 "block" -> 	
-													 NewMsg = lists:foldl(fun(U, M) -> content_utils:block(M, U, "*") end, Msg, URLs),
+													 NewMsg = lists:foldl(fun(U) -> content_utils:block(Msg, U, "*") end, Msg, URLs),
 													 {false, NewMsg}
 											 end			 
 		end

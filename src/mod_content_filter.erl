@@ -51,14 +51,13 @@ start_link(Host, Bindings) ->
 %%--------------------------------------------------------------------
 init([Host, Bindings]) ->
 	%% Read existing criteria from database
-	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (host text, predicate text, arguments text)"),
-	
-	SQL = "select predicate, arguments from criteria where host='" ++ Host ++ "'",
+	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (id int not null auto_increment=11, host text, predicate text, arguments text, action text)"),	
+	SQL = "select predicate, arguments, action from criteria where host='" ++ Host ++ "'",
 	CompiledCriteria = case catch(ejabberd_odbc:sql_query(Host, SQL)) of
 											 {selected, _Header, Rs} when is_list(Rs) ->
 												 lists:foldl(
-													 fun({P, Args}, L) ->
-																R = compile(P, Args, Bindings, Host),
+													 fun({P, Args, Action}, L) ->
+																R = compile(P, Args, Action, Bindings, Host),
 																case R of																	
 																	{ok, C} ->																		
 																		[{{P, Args}, C} | L];																	
@@ -83,8 +82,8 @@ init([Host, Bindings]) ->
 handle_call(get_criteria, _From, State) ->
 	{reply, State#state.criteria, State};
 
-handle_call({add_criterion, PredicateName, Args}, _From, #state{criteria = Criteria, bindings = Bindings, host = Host} = State) ->
-	case compile(PredicateName, Args, Bindings, Host) of
+handle_call({add_criterion, PredicateName, Args, Action}, _From, #state{criteria = Criteria, bindings = Bindings, host = Host} = State) ->
+	case compile(PredicateName, Args, Action, Bindings, Host) of
 		{ok, CompiledCriterion} ->
 			Key = {PredicateName, Args},
 			{reply, ok, State#state{criteria = lists:keystore(Key, 1, Criteria, {Key, CompiledCriterion})}};
@@ -173,27 +172,34 @@ filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name 
 	?DEBUG("Packet, From, To:~p~n, ~p~n, ~p~n", [Packet, From, To]),
 	
 	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, Host, _Res} = To,
-	case isCensoredMsg(Host, Packet)  of
+	case inspect_message(Host, Packet)  of
 		true ->
 			%%{From, To, {xmlelement, Name, [{"flag", "censored"} | Attrs], Els}};
 			?INFO_MSG("Dropped by content filter:~p", [Packet]),
 			drop;
 		false ->
-			{From, To, Packet}
+			{From, To, Packet};
+		{false, NewMsgBody} ->
+			{From, To, replace_body(Packet, NewMsgBody)}
 	end;
 
 filter_packet(P) ->
 	?DEBUG("Filter packet:~p~n", [P]),
 	P.
 
-
-isCensoredMsg(Host, Packet) ->
-	?DEBUG("Host:~p~n", [Host]),
-	?DEBUG("Packet:~p~n", [Packet]),
+inspect_message(Host, Packet) ->
 	Criteria = getCriteria(Host),
 	MsgBody = xml:get_subtag_cdata(Packet ,"body"),
-	?DEBUG("Msgbody:~p~n", [MsgBody]),
-	lists:any(fun({_Raw, CrFun}) -> CrFun(MsgBody) end, Criteria).
+	catch(lists:foldl(fun({_Predicate, CrFun}, {keep, AccMsg}) -> 
+									 case CrFun(AccMsg) of 
+										true -> 
+											throw(drop);
+										false ->
+											{keep, AccMsg};
+										{false, M} ->
+											{keep, M}
+									 end
+							end, {keep, MsgBody}, Criteria)).
 
 getCriteria(Host) ->
 	gen_server:call(get_filter_name(Host), get_criteria).
@@ -201,13 +207,13 @@ getCriteria(Host) ->
 
 
 %% Criterion compilation.
-%% The result of compilation is a function that could be directly applied to the packet's message body
-%% Bindings is a list of {PredicateName, Fun}, where Fun is fun(Message, Args).
-compile(PredicateName, Args, Bindings, Host) ->
+%% The result of compilation is a function that could be directly applied to the packet's message body.
+%% Bindings is a list of {PredicateName, Fun}, where Fun is fun(MessageBody, Args).
+compile(PredicateName, Args, Action, Bindings, Host) ->
 	case lists:keysearch(PredicateName, 1, Bindings) of
 		{value, {PName, Fun}} ->
 			?DEBUG("Compile:~p, fun:~p~n", [PName, Fun]),
-			{ok, fun(Msg) -> erlang:apply(Fun, [Msg, Args, Host]) end};
+			{ok, fun(Msg) -> erlang:apply(Fun, [Msg, Args, Action, Host]) end};
 		_ ->
 			{error, {predicate_not_supported, PredicateName}}
 	end.
@@ -219,6 +225,11 @@ get_bindings(File) ->
 	{ok, Parsed} = erl_parse:parse_exprs(Scanned),
 	{value, Result, _} = erl_eval:exprs(Parsed, []),
 	{ok, Result}.
+
+replace_body(Packet, NewBody) ->
+	OldBodyElem = xml:get_subtag(Packet, "body"),
+	NewBodyElem = exmpp_xml:set_cdata(OldBodyElem, NewBody),
+	exmpp_xml:replace_child(Packet, OldBodyElem, NewBodyElem).
 
 test() ->
 	mod_content_filter:start("cleartext.com", [{predicate_bindings, "/opt/ejabberd-2.1.3/conf/cond_bindings.cfg"},
