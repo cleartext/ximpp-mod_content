@@ -51,7 +51,7 @@ start_link(Host, Bindings) ->
 %%--------------------------------------------------------------------
 init([Host, Bindings]) ->
 	%% Read existing criteria from database
-	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (id int not null auto_increment=11, host text, predicate text, arguments text, action text)"),	
+	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (id int unsigned not null auto_increment, host text, predicate text, arguments text, action text, primary key (id))"),	
 	SQL = "select predicate, arguments, action from criteria where host='" ++ Host ++ "'",
 	CompiledCriteria = case catch(ejabberd_odbc:sql_query(Host, SQL)) of
 											 {selected, _Header, Rs} when is_list(Rs) ->
