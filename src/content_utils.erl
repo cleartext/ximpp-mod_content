@@ -44,8 +44,8 @@ filters() ->
 	 
 	 {"equals", fun(Msg, Phrase, "drop", _Direction, _Host) ->
 									 case Msg =:= Phrase of
-									  true -> drop;
-									  false -> {keep, Msg}
+										 true -> drop;
+										 false -> {keep, Msg}
 									 end;
 								(Msg, Phrase, "block", _Direction, _Host) ->                 	
 									{keep, content_utils:block(Msg, Phrase, "*")}                	
@@ -56,8 +56,8 @@ filters() ->
 												 WordList = string:tokens(Words, ";"),
 												 ContainsAll = lists:all(fun(W) -> string:str(Msg, W) > 0 end, WordList),
 												 case ContainsAll of 
-												 	true -> drop;
-												 	false -> {keep, Msg}
+													 true -> drop;
+													 false -> {keep, Msg}
 												 end;	
 											(Msg, Words, "block", _Direction, _Host) ->
 												WordList = string:tokens(Words, ";"),
@@ -70,8 +70,8 @@ filters() ->
 												 WordList = string:tokens(Words, ";"),
 												 ContainsAny = lists:any(fun(W) -> string:str(Msg, W) > 0 end, WordList),
 												 case ContainsAny of 
-												 	true -> drop;
-												 	false -> {keep, Msg}
+													 true -> drop;
+													 false -> {keep, Msg}
 												 end;	
 											(Msg, Words, "block", _Direction, _Host) ->
 												WordList = string:tokens(Words, ";"),
@@ -86,15 +86,15 @@ filters() ->
 											 Scores = webroot_utils:get_scores(Host, URLs),
 											 case Action of 
 												 "drop" -> 
-												 	case lists:any(fun(S) -> S >= T end, Scores) of
-												 		true -> drop;
-												 		false -> {keep, Msg}
-												 	end;	
+													 case lists:any(fun(S) -> S >= T end, Scores) of
+														 true -> drop;
+														 false -> {keep, Msg}
+													 end;	
 												 "block" -> 	
 													 NewMsg = lists:foldl(fun(U, M) -> content_utils:block(M, U, "*") end, Msg, URLs),
 													 {keep, NewMsg}
-												end	 
-											 end			 
+											 end	 
+		end			 
 	 }
 	].	
 	
