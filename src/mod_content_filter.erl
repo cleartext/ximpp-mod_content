@@ -51,16 +51,16 @@ start_link(Host, Bindings) ->
 %%--------------------------------------------------------------------
 init([Host, Bindings]) ->
 	%% Read existing criteria from database
-	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (id int unsigned not null auto_increment, host text, predicate text, arguments text, action text, primary key (id))"),	
-	SQL = "select predicate, arguments, action from criteria where host='" ++ Host ++ "'",
+	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (id int unsigned not null auto_increment, host text, predicate text, arguments text, action text, direction text, primary key (id))"),	
+	SQL = "select predicate, arguments, action, direction from criteria where host='" ++ Host ++ "'",
 	CompiledCriteria = case catch(ejabberd_odbc:sql_query(Host, SQL)) of
 											 {selected, _Header, Rs} when is_list(Rs) ->
 												 lists:foldl(
-													 fun({P, Args, Action}, L) ->
-																R = compile(P, Args, Action, Bindings, Host),
+													 fun({P, Args, Action, Direction}, L) ->
+																R = compile(P, Args, Action, Direction, Bindings, Host),
 																case R of																	
 																	{ok, C} ->																		
-																		[{{P, Args}, C} | L];																	
+																		[{{P, Args, Action, Direction}, C} | L];																	
 																	{error, _} ->																		
 																		L																
 																end
@@ -79,13 +79,16 @@ init([Host, Bindings]) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
-handle_call(get_criteria, _From, State) ->
-	{reply, State#state.criteria, State};
+handle_call({get_criteria, Direction}, _From, State) ->
+	Criteria = lists:filter(fun({{_P, _Args, _Action, D}, _Func}) -> 
+														D == both orelse D == Direction 
+													end, State#state.criteria),
+	{reply, Criteria, State};
 
-handle_call({add_criterion, PredicateName, Args, Action}, _From, #state{criteria = Criteria, bindings = Bindings, host = Host} = State) ->
-	case compile(PredicateName, Args, Action, Bindings, Host) of
+handle_call({add_criterion, PredicateName, Args, Action, Direction}, _From, #state{criteria = Criteria, bindings = Bindings, host = Host} = State) ->
+	case compile(PredicateName, Args, Action, Direction, Bindings, Host) of
 		{ok, CompiledCriterion} ->
-			Key = {PredicateName, Args},
+			Key = {PredicateName, Args, Action, Direction},
 			{reply, ok, State#state{criteria = lists:keystore(Key, 1, Criteria, {Key, CompiledCriterion})}};
 		Error ->
 			{reply, Error, State}
@@ -170,9 +173,12 @@ get_filter_name(Host) ->
 
 filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name == "message" ->
 	?DEBUG("Packet, From, To:~p~n, ~p~n, ~p~n", [Packet, From, To]),
+
+	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, HostFrom, _Res} = From,		
+	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, HostTo, _Res} = To,
+
 	
-	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, Host, _Res} = To,
-	case inspect_message(Host, Packet)  of
+	case inspect_message(HostFrom, HostTo, Packet)  of
 		drop ->
 			%%{From, To, {xmlelement, Name, [{"flag", "censored"} | Attrs], Els}};
 			?INFO_MSG("Dropped by content filter:~p", [Packet]),
@@ -185,33 +191,52 @@ filter_packet(P) ->
 	?DEBUG("Filter packet:~p~n", [P]),
 	P.
 
-inspect_message(Host, Packet) ->
-	Criteria = getCriteria(Host),
+inspect_message(HostFrom, HostTo, Packet) ->
+	OutCriteria = get_criteria(HostFrom, out),
 	MsgBody = xml:get_subtag_cdata(Packet ,"body"),
+	R1 = inspect_message(MsgBody, OutCriteria),
+	case R1 of
+		drop -> drop;
+		{keep, NewMsg} -> 
+			InCriteria = get_criteria(HostTo, in),
+			inspect_message(NewMsg, InCriteria)
+	end.
+
+inspect_message(Text, undefined) ->
+	{keep, Text};
+
+inspect_message(Text, Criteria) ->
 	catch(lists:foldl(fun({_Predicate, CrFun}, {keep, AccMsg}) -> 
 									 case CrFun(AccMsg) of 
-										true -> 
+										drop -> 
 											throw(drop);
-										false ->
+										keep ->
 											{keep, AccMsg};
-										{false, M} ->
+										{keep, M} ->
 											{keep, M}
 									 end
-							end, {keep, MsgBody}, Criteria)).
+							end, {keep, Text}, Criteria)).
 
-getCriteria(Host) ->
-	gen_server:call(get_filter_name(Host), get_criteria).
+get_criteria(Host, Direction) ->
+	%% First check if the host has a filter
+	FilterName = get_filter_name(Host),
+	case erlang:whereis(FilterName) of
+		undefined -> 
+			undefined;
+		_F ->
+			gen_server:call(FilterName, {get_criteria, Direction})
+	end.
 
 
 
 %% Criterion compilation.
 %% The result of compilation is a function that could be directly applied to the packet's message body.
 %% Bindings is a list of {PredicateName, Fun}, where Fun is fun(MessageBody, Args).
-compile(PredicateName, Args, Action, Bindings, Host) ->
+compile(PredicateName, Args, Action, Direction, Bindings, Host) ->
 	case lists:keysearch(PredicateName, 1, Bindings) of
 		{value, {PName, Fun}} ->
 			?DEBUG("Compile:~p, fun:~p~n", [PName, Fun]),
-			{ok, fun(Msg) -> erlang:apply(Fun, [Msg, Args, Action, Host]) end};
+			{ok, fun(Msg) -> erlang:apply(Fun, [Msg, Args, Action, Direction, Host]) end};
 		_ ->
 			{error, {predicate_not_supported, PredicateName}}
 	end.

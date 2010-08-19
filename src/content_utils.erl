@@ -30,55 +30,71 @@ block(MessageBody, TextToBlock, BlockSymbol) ->
 %% Local Functions
 %%
 filters() ->
-	[{"contains", fun(Msg, Phrase, "drop", _Host) ->
+	[{"contains", fun(Msg, Phrase, "drop", _Direction, _Host) ->
 										 case string:str(Msg, Phrase) of
 											 0 -> 
-												 {false, Msg};
+												 {keep, Msg};
 											 _ ->
-												 true
+												 drop
 										 end;			
-									(Msg, Phrase, "block", _Host) ->                 	
-										{false, content_utils:block(Msg, Phrase, "*")}  	
+									(Msg, Phrase, "block", _Direction, _Host) ->                 	
+										{keep, content_utils:block(Msg, Phrase, "*")}  	
 		end
 	 },
 	 
-	 {"equals", fun(Msg, Phrase, "drop", _Host) ->
-									 Msg =:= Phrase;
-								(Msg, Phrase, "block", _Host) ->                 	
-									{false, content_utils:block(Msg, Phrase, "*")}                	
+	 {"equals", fun(Msg, Phrase, "drop", _Direction, _Host) ->
+									 case Msg =:= Phrase of
+									  true -> drop;
+									  false -> {keep, Msg}
+									 end;
+								(Msg, Phrase, "block", _Direction, _Host) ->                 	
+									{keep, content_utils:block(Msg, Phrase, "*")}                	
 		end
 	 },
 	 
-	 {"contains_all", fun(Msg, Words, "drop", _Host) ->
+	 {"contains_all", fun(Msg, Words, "drop", _Direction, _Host) ->
 												 WordList = string:tokens(Words, ";"),
-												 lists:all(fun(W) -> string:str(Msg, W) > 0 end, WordList);
-											(Msg, Words, "block", _Host) ->
+												 ContainsAll = lists:all(fun(W) -> string:str(Msg, W) > 0 end, WordList),
+												 case ContainsAll of 
+												 	true -> drop;
+												 	false -> {keep, Msg}
+												 end;	
+											(Msg, Words, "block", _Direction, _Host) ->
 												WordList = string:tokens(Words, ";"),
-												NewMsg = lists:foldl(fun(W) -> content_utils:block(Msg, W, "*") end, Msg, WordList),
-												{false, NewMsg}                	                  
+												NewMsg = lists:foldl(fun(W, M) -> content_utils:block(M, W, "*") end, Msg, WordList),
+												{keep, NewMsg}                	                  
 		end
 	 },
 	 
-	 {"contains_any", fun(Msg, Words, "drop", _Host) ->
+	 {"contains_any", fun(Msg, Words, "drop", _Direction, _Host) ->
 												 WordList = string:tokens(Words, ";"),
-												 lists:any(fun(W) -> string:str(Msg, W) > 0 end, WordList);
-											(Msg, Words, "block", _Host) ->
+												 ContainsAny = lists:any(fun(W) -> string:str(Msg, W) > 0 end, WordList),
+												 case ContainsAny of 
+												 	true -> drop;
+												 	false -> {keep, Msg}
+												 end;	
+											(Msg, Words, "block", _Direction, _Host) ->
 												WordList = string:tokens(Words, ";"),
-												NewMsg = lists:foldl(fun(W) -> content_utils:block(Msg, W, "*") end, Msg, WordList),
-												{false, NewMsg} 
+												NewMsg = lists:foldl(fun(W, M) -> content_utils:block(M, W, "*") end, Msg, WordList),
+												{keep, NewMsg} 
 		end
 	 },
 	 
-	 {"check_urls", fun(Msg, ScoreThreshold, Action, Host) ->
+	 {"check_urls", fun(Msg, ScoreThreshold, Action, _Direction, Host) ->
 											 URLs = webroot_utils:extract_urls(Msg),
 											 T = list_to_integer(ScoreThreshold), 
 											 Scores = webroot_utils:get_scores(Host, URLs),
 											 case Action of 
-												 "drop" -> lists:any(fun(S) -> S >= T end, Scores);
+												 "drop" -> 
+												 	case lists:any(fun(S) -> S >= T end, Scores) of
+												 		true -> drop;
+												 		false -> {keep, Msg}
+												 	end;	
 												 "block" -> 	
-													 NewMsg = lists:foldl(fun(U) -> content_utils:block(Msg, U, "*") end, Msg, URLs),
-													 {false, NewMsg}
+													 NewMsg = lists:foldl(fun(U, M) -> content_utils:block(M, U, "*") end, Msg, URLs),
+													 {keep, NewMsg}
+												end	 
 											 end			 
-		end
 	 }
 	].	
+	
