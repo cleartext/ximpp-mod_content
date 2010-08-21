@@ -1,9 +1,10 @@
 %%% -------------------------------------------------------------------
-%%% Author  : bokner
+%%% Copyright 2010 Cleartext
+%%% Author  : Boris Okner <boris.okner@gmail.com>
 %%% Description : WebRoot service
 %%%
-%%% Created : Aug 14, 2010
-%%% -------------------------------------------------------------------
+%%% Created : 14 Aug 2010 
+%%%-------------------------------------------------------------------
 -module(webroot_service).
 
 -behaviour(gen_server).

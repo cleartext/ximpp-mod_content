@@ -1,9 +1,9 @@
 %%-------------------------------------------------------------------
-%%% File    : mod_content_filter.erl
-%%% Author  : Boris Okner <b.okner@rogers.com>
+%%% Copyright 2010 Cleartext
+%%% Author  : Boris Okner <boris.okner@gmail.com>
 %%% Description : Criteria-based message filtering
 %%%
-%%% Created : 14 Jun 2009 by Boris Okner <b.okner@rogers.com>
+%%% Created : 14 Jul 2010 
 %%%-------------------------------------------------------------------
 -module(mod_content_filter).
 
@@ -51,7 +51,7 @@ start_link(Host, Bindings) ->
 %%--------------------------------------------------------------------
 init([Host, Bindings]) ->
 	%% Read existing criteria from database
-	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (id int unsigned not null auto_increment, host text, predicate text, arguments text, action text, direction text, primary key (id))"),	
+	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (id int unsigned not null auto_increment, host text, predicate text, arguments text, action text, direction int default 0, primary key (id))"),	
 	SQL = "select predicate, arguments, action, direction from criteria where host='" ++ Host ++ "'",
 	CompiledCriteria = case catch(ejabberd_odbc:sql_query(Host, SQL)) of
 											 {selected, _Header, Rs} when is_list(Rs) ->

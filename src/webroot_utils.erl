@@ -1,9 +1,9 @@
 %%-------------------------------------------------------------------
-%%% File    : webroot_utils.erl
-%%% Author  : Boris Okner <b.okner@rogers.com>
+%%% Copyright 2010 Cleartext
+%%% Author  : Boris Okner <boris.okner@gmail.com>
 %%% Description : WebRoot service support
 %%%
-%%% Created : 14 Aug 2010 by Boris Okner <b.okner@rogers.com>
+%%% Created : 14 Aug 2010 
 %%%-------------------------------------------------------------------
 -module(webroot_utils).
 

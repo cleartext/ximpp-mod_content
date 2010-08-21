@@ -1,14 +1,12 @@
 %%-------------------------------------------------------------------
-%%% File    : json_utils.erl
-%%% Author  : Boris Okner <b.okner@rogers.com>
+%%% Copyright 2010 Cleartext
+%%% Author  : Boris Okner <boris.okner@gmail.com>
 %%% Description : JSON support
 %%% The code was derived from mochiweb library, 
 %%% with the goal to have a single file with JSON utilities
-%%% 
 %%% 	
-%%% Created : 14 Aug 2010 by Boris Okner <b.okner@rogers.com>
+%%% Created : 14 Aug 2010 
 %%%-------------------------------------------------------------------
-
 -module(json_utils).
 
 -export([encoder/1, encode/1]).
