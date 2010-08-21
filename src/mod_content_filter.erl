@@ -68,7 +68,9 @@ init([Host, Bindings]) ->
 											 _ ->
 												 []
 										 end,
-	{ok, #state{host = Host, criteria = CompiledCriteria, bindings = Bindings}}.
+  %% Sort criteria list so "drop" rules go first
+	CList = lists:sort(fun criteria_sort/2, CompiledCriteria),
+	{ok, #state{host = Host, criteria = CList, bindings = Bindings}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -227,8 +229,6 @@ get_criteria(Host, Direction) ->
 			gen_server:call(FilterName, {get_criteria, Direction})
 	end.
 
-
-
 %% Criterion compilation.
 %% The result of compilation is a function that could be directly applied to the packet's message body.
 %% Bindings is a list of {PredicateName, Fun}, where Fun is fun(MessageBody, Args).
@@ -253,6 +253,14 @@ replace_body(Packet, NewBody) ->
 	OldBodyElem = xml:get_subtag(Packet, "body"),
 	NewBodyElem = exmpp_xml:set_cdata(OldBodyElem, NewBody),
 	exmpp_xml:replace_child(Packet, OldBodyElem, NewBodyElem).
+
+%% Sort criteria so "drop" rules come first
+criteria_sort({{_, _, "drop", _}, _}, {{_, _, _A, _}, _}) -> 
+	true; 
+criteria_sort({{_, _, A, _}, _}, {{_, _, "drop", _}, _}) when A /= "drop" -> 
+	false; 
+criteria_sort(_A, _B) -> 
+	true.
 
 test() ->
 	mod_content_filter:start("cleartext.com", [{predicate_bindings, "/opt/ejabberd-2.1.3/conf/cond_bindings.cfg"},
