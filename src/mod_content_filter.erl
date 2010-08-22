@@ -208,16 +208,20 @@ inspect_message(Text, undefined) ->
 	{keep, Text};
 
 inspect_message(Text, Criteria) ->
-	catch(lists:foldl(fun({_Predicate, CrFun}, {keep, AccMsg}) -> 
-									 case CrFun(AccMsg) of 
+	lists:foldl(fun({Predicate, CrFun}, {keep, AccMsg}) -> 
+									 try CrFun(AccMsg) of 
 										drop -> 
 											throw(drop);
 										keep ->
 											{keep, AccMsg};
 										{keep, M} ->
 											{keep, M}
+									catch
+										_Err:Reason ->
+											?CRITICAL_MSG("Problem evaluating ~p:~n~p~n", [Predicate, Reason]),
+											{keep, AccMsg}
 									 end
-							end, {keep, Text}, Criteria)).
+							end, {keep, Text}, Criteria).
 
 get_criteria(Host, Direction) ->
 	%% First check if the host has a filter
