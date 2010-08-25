@@ -19,13 +19,24 @@
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
+-include("ejabberd.hrl").
 -record(state, {service_url, user, password}).
 
 %% ====================================================================
 %% External functions
 %% ====================================================================
 start_link(Host, ServiceUrl, User, Password) ->
-        gen_server:start({local, get_service_name(Host)}, ?MODULE, [ServiceUrl, User, Password], []).
+	ServiceName = get_service_name(Host),
+  ServiceProc = gen_mod:get_module_proc(Host, ServiceName),
+  ServiceChildSpec =
+	{ServiceProc,
+	 {gen_server, start_link, [{local, ServiceName}, ?MODULE, [ServiceUrl, User, Password], []]},
+	 permanent,
+	 2000,
+	 worker,
+	 [gen_server]},
+    supervisor:start_child(ejabberd_sup, ServiceChildSpec),
+		?DEBUG("Webroot service started on ~p~n", [Host]).
 
 get_scores(Host, URLs) ->
         gen_server:call(get_service_name(Host), {get_scores, URLs}).

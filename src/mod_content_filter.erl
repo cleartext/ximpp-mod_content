@@ -35,7 +35,16 @@
 %%--------------------------------------------------------------------
 start_link(Host, Bindings) ->
 	ContentFilterName = get_filter_name(Host),
-	gen_server:start_link({local, ContentFilterName}, ?MODULE, [Host, Bindings], []).
+  ContentFilterProc = gen_mod:get_module_proc(Host, ContentFilterName),
+  ContentFilterChildSpec =
+	{ContentFilterProc,
+	 {gen_server, start_link, [{local, ContentFilterName}, ?MODULE, [Host, Bindings], []]},
+	 permanent,
+	 2000,
+	 worker,
+	 [gen_server]},
+    supervisor:start_child(ejabberd_sup, ContentFilterChildSpec),
+		?DEBUG("Main content filter started on ~p~n", [Host]).
 
 
 %%====================================================================
