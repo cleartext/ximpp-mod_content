@@ -174,8 +174,6 @@ filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name 
 
 	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, HostFrom, _Res} = From,		
 	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, HostTo, _Res} = To,
-
-	
 	case inspect_message(HostFrom, HostTo, Packet)  of
 		drop ->
 			%%{From, To, {xmlelement, Name, [{"flag", "censored"} | Attrs], Els}};
