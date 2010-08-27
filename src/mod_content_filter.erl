@@ -10,7 +10,7 @@
 -behaviour(gen_server).
 -behavior(gen_mod).
 
--export([start/2, stop/1, filter_packet/1]).
+-export([start/2, stop/1, filter_packet/1, reload_rules/1]).
 -export([test/0]).
 
 %% API
@@ -46,7 +46,9 @@ start_link(Host, Bindings) ->
     supervisor:start_child(ejabberd_sup, ContentFilterChildSpec),
 		?DEBUG("Main content filter started on ~p~n", [Host]).
 
-
+reload_rules(Host) ->
+	FilterName = get_filter_name(Host),
+	gen_server:call(FilterName, reload).
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -59,26 +61,7 @@ start_link(Host, Bindings) ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([Host, Bindings]) ->
-	%% Read existing criteria from database
-	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (id int unsigned not null auto_increment, host text, predicate text, arguments text, action text, direction int default 0, primary key (id))"),	
-	SQL = "select predicate, arguments, action, direction from criteria where host='" ++ Host ++ "'",
-	CompiledCriteria = case catch(ejabberd_odbc:sql_query(Host, SQL)) of
-											 {selected, _Header, Rs} when is_list(Rs) ->
-												 lists:foldl(
-													 fun({P, Args, Action, Direction}, L) ->
-																R = compile(P, Args, Action, Direction, Bindings, Host),
-																case R of																	
-																	{ok, C} ->																		
-																		[{{P, Args, Action, Direction}, C} | L];																	
-																	{error, _} ->																		
-																		L																
-																end
-													 end, [], Rs);
-											 _ ->
-												 []
-										 end,
-  %% Sort criteria list so "drop" rules go first
-	CList = lists:sort(fun criteria_sort/2, CompiledCriteria),
+	CList = load_criteria(Host, Bindings),
 	{ok, #state{host = Host, criteria = CList, bindings = Bindings}}.
 
 %%--------------------------------------------------------------------
@@ -95,6 +78,10 @@ handle_call({get_criteria, Direction}, _From, State) ->
 														D == both orelse D == Direction 
 													end, State#state.criteria),
 	{reply, Criteria, State};
+
+handle_call(reload, _From, #state{host = Host, bindings = Bindings} = State) ->
+	Reply = ok,
+	{reply, Reply, State#state{criteria = load_criteria(Host, Bindings)}};
 
 handle_call({add_criterion, PredicateName, Args, Action, Direction}, _From, #state{criteria = Criteria, bindings = Bindings, host = Host} = State) ->
 	case compile(PredicateName, Args, Action, Direction, Bindings, Host) of
@@ -231,6 +218,28 @@ inspect_message(Text, Criteria) ->
 											{keep, AccMsg}
 									 end
 							end, {keep, Text}, Criteria).
+
+load_criteria(Host, Bindings) ->
+	%% Read existing criteria from database
+	catch ejabberd_odbc:sql_query(Host, "create table if not exists criteria (id int unsigned not null auto_increment, host text, predicate text, arguments text, action text, direction int default 0, primary key (id))"),	
+	SQL = "select predicate, arguments, action, direction from criteria where host='" ++ Host ++ "'",
+	CompiledCriteria = case catch(ejabberd_odbc:sql_query(Host, SQL)) of
+											 {selected, _Header, Rs} when is_list(Rs) ->
+												 lists:foldl(
+													 fun({P, Args, Action, Direction}, L) ->
+																R = compile(P, Args, Action, Direction, Bindings, Host),
+																case R of																	
+																	{ok, C} ->																		
+																		[{{P, Args, Action, Direction}, C} | L];																	
+																	{error, _} ->																		
+																		L																
+																end
+													 end, [], Rs);
+											 _ ->
+												 []
+										 end,
+  %% Sort criteria list so "drop" rules go first
+	lists:sort(fun criteria_sort/2, CompiledCriteria).	
 
 get_criteria(Host, Direction) ->
 	%% First check if the host has a filter
