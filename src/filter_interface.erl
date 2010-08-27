@@ -25,7 +25,7 @@
 %%% Web interface
 %%--------------------------------------------------------------------
 
-process(["update_rules"], #request{q = Query}) ->
+process([], #request{q = Query}) ->
 	Host = proplists:get_value("host", Query, undefined),
 	Result = case Host of 
 						 undefined ->
