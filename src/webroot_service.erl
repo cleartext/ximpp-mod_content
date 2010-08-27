@@ -20,6 +20,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("ejabberd.hrl").
+-define(DEFAULT_TIMEOUT, 10000).
 -record(state, {service_url, user, password}).
 
 %% ====================================================================
@@ -39,7 +40,7 @@ start_link(Host, ServiceUrl, User, Password) ->
 		?DEBUG("Webroot service started on ~p~n", [Host]).
 
 get_scores(Host, URLs) ->
-        gen_server:call(get_service_name(Host), {get_scores, URLs}).
+        gen_server:call(get_service_name(Host), {get_scores, URLs}, ?DEFAULT_TIMEOUT).
 
 stop(Host) ->
         gen_server:cast(get_service_name(Host), stop).
