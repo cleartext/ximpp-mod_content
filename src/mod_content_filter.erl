@@ -306,6 +306,7 @@ replace_content(Packet, NewMsg) ->
 	P2 = case HtmlBody of
 				 undefined -> P1;
 				 H ->
+					 ?DEBUG("html markup: ~p~nPacket:~p~n ", [H, Packet]),
 					 OldHtmlElem = exmpp_xml:get_element(Packet, "html"),
 					 [NewHtmlBodyEl] = exmpp_xml:parse_document(H),
 					 NewHtmlElem = exmpp_xml:set_children(OldHtmlElem, NewHtmlBodyEl),
@@ -316,6 +317,7 @@ replace_content(Packet, NewMsg) ->
 	case TextBody of
 		undefined -> P2;
 		T ->
+			?DEBUG("twitter text:~p~n", [T]),
 			OldParentTextElem = get_twitter_x_elem(Packet),
 			NewTextEl = exmpp_xml:set_cdata(exmpp_xml:element("text"), T),
 			NewParentTextElem = exmpp_xml:set_children(OldParentTextElem, [NewTextEl]),
