@@ -335,7 +335,7 @@ criteria_sort(_A, _B) ->
 %% Retrieve Twitter text element fro packet, if any
 get_twitter_x_elem(Packet) ->
 	XEls = exmpp_xml:get_elements(Packet, "x"),	
-	case lists:dropwhile(fun(X) -> exmpp_xml:get_attribute(X, "type", undefined) == "tweet" end, XEls)
+	case lists:dropwhile(fun(X) -> exmpp_xml:get_attribute(X, "type", undefined) /= "tweet" end, XEls)
 		of [] -> undefined;
 		L -> hd(L)
 	end.
