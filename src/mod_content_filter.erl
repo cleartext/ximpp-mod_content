@@ -232,7 +232,7 @@ inspect_message(Msg, Criteria) ->
 														NewText
 												catch
 													_Err:Reason ->
-														?CRITICAL_MSG("Problem evaluating ~p:~nText:~p ~p~n", [Predicate, Text, Reason]),
+														?CRITICAL_MSG("Problem evaluating ~p:~nText:~p, Type:~p ~p~n", [Predicate, Text, Type, Reason]),
 														Text
 												end, 
 											[{Type, FilteredText} | Acc]
