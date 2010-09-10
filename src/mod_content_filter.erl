@@ -221,7 +221,9 @@ inspect_message(Msg, Criteria) ->
 					fun({Predicate, CrFun}, AccMsg) -> 												 
 							 %% Loop over message parts
 							 lists:foldl(
-								 fun({Type, Text}, Acc)	->					 
+								 fun
+									 ({_, undefined}, Acc) -> Acc;
+									 ({Type, Text}, Acc)	->					 
 											FilteredText = 
 												try CrFun(Text) of 
 													drop -> 
