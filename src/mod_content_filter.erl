@@ -35,16 +35,16 @@
 %%--------------------------------------------------------------------
 start_link(Host, Bindings) ->
 	ContentFilterName = get_filter_name(Host),
-  ContentFilterProc = gen_mod:get_module_proc(Host, ContentFilterName),
-  ContentFilterChildSpec =
-	{ContentFilterProc,
-	 {gen_server, start_link, [{local, ContentFilterName}, ?MODULE, [Host, Bindings], []]},
-	 permanent,
-	 2000,
-	 worker,
-	 [gen_server]},
-    supervisor:start_child(ejabberd_sup, ContentFilterChildSpec),
-		?DEBUG("Main content filter started on ~p~n", [Host]).
+	ContentFilterProc = gen_mod:get_module_proc(Host, ContentFilterName),
+	ContentFilterChildSpec =
+		{ContentFilterProc,
+		 {gen_server, start_link, [{local, ContentFilterName}, ?MODULE, [Host, Bindings], []]},
+		 permanent,
+		 2000,
+		 worker,
+		 [gen_server]},
+	supervisor:start_child(ejabberd_sup, ContentFilterChildSpec),
+	?DEBUG("Main content filter started on ~p~n", [Host]).
 
 reload_rules(Host) ->
 	FilterName = get_filter_name(Host),
@@ -75,7 +75,7 @@ init([Host, Bindings]) ->
 %%--------------------------------------------------------------------
 handle_call({get_criteria, Direction}, _From, State) ->
 	Criteria = lists:filter(fun({{_P, _Args, _Action, D}, _Func}) -> 
-														D == both orelse D == Direction 
+															 D == both orelse D == Direction 
 													end, State#state.criteria),
 	{reply, Criteria, State};
 
@@ -145,6 +145,7 @@ code_change(_OldVsn, State, _Extra) ->
 start(Host, Opts) ->
 	?DEBUG("mod_content_filter starting on ~p...", [Host]),
 	ejabberd_hooks:add(filter_packet, global, ?MODULE, filter_packet, 50),
+	ejabberd_hooks:add(webadmin_page_host, Host, filter_interface, web_page_host, 50),
 	BindingFile = proplists:get_value(predicate_bindings, Opts, []),
 	{ok, Bindings} = get_bindings(BindingFile),
 	start_link(Host, Bindings),
@@ -171,7 +172,7 @@ get_filter_name(Host) ->
 
 filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name == "message" ->
 	?DEBUG("Packet, From, To:~p~n, ~p~n, ~p~n", [Packet, From, To]),
-
+	
 	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, HostFrom, _Res} = From,		
 	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, HostTo, _Res} = To,
 	case inspect_message(HostFrom, HostTo, Packet)  of
@@ -179,8 +180,8 @@ filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name 
 			%%{From, To, {xmlelement, Name, [{"flag", "censored"} | Attrs], Els}};
 			?INFO_MSG("Dropped by content filter:~p", [Packet]),
 			drop;
-		{keep, NewMsgBody} ->
-			{From, To, replace_body(Packet, NewMsgBody)}
+		NewMsgBody ->
+			{From, To, replace_content(Packet, NewMsgBody)}
 	end;
 
 filter_packet(P) ->
@@ -189,33 +190,50 @@ filter_packet(P) ->
 
 inspect_message(HostFrom, HostTo, Packet) ->
 	OutCriteria = get_criteria(HostFrom, out),
-	MsgBody = xml:get_subtag_cdata(Packet ,"body"),
-	R1 = inspect_message(MsgBody, OutCriteria),
+	MsgBody = to_text(exmpp_xml:get_element(Packet ,"body")),
+	HtmlBody = case exmpp_xml:get_element(exmpp_xml:get_element(Packet, "html"),
+																				"body") of undefined -> undefined;
+							 H -> to_text(H)
+						 end,
+	%% Twitter-specific element
+	TextBody = case get_twitter_x_elem(Packet) of
+		undefined -> undefined;
+		X -> to_text(exmpp_xml:get_element(X, "text"))
+	end,					 		
+	R1 = inspect_message([{msg, MsgBody}, {html, HtmlBody}, {text, TextBody}], OutCriteria),
 	case R1 of
 		drop -> drop;
-		{keep, NewMsg} -> 
+		NewMsg -> 
 			InCriteria = get_criteria(HostTo, in),
 			inspect_message(NewMsg, InCriteria)
 	end.
 
-inspect_message(Text, undefined) ->
-	{keep, Text};
+inspect_message(Msg, undefined) ->
+	Msg;
 
-inspect_message(Text, Criteria) ->
-	lists:foldl(fun({Predicate, CrFun}, {keep, AccMsg}) -> 
-									 try CrFun(AccMsg) of 
-										drop -> 
-											throw(drop);
-										keep ->
-											{keep, AccMsg};
-										{keep, M} ->
-											{keep, M}
-									catch
-										_Err:Reason ->
-											?CRITICAL_MSG("Problem evaluating ~p:~n~p~n", [Predicate, Reason]),
-											{keep, AccMsg}
-									 end
-							end, {keep, Text}, Criteria).
+inspect_message(Msg, Criteria) ->
+	catch(lists:foldl(
+					fun({Predicate, CrFun}, AccMsg) -> 												 
+							 %% Loop over message parts
+							 lists:foldl(
+								 fun({Type, Text}, Acc)	->					 
+											FilteredText = 
+												try CrFun(Text) of 
+													drop -> 
+														throw(drop);
+													keep ->
+														Text;
+													{keep, NewText} ->
+														NewText
+												catch
+													_Err:Reason ->
+														?CRITICAL_MSG("Problem evaluating ~p:~n~p~n", [Predicate, Reason]),
+														Text
+												end, 
+											[{Type, FilteredText} | Acc]
+								 end,				 
+								 [], AccMsg)
+					end, Msg, Criteria)).
 
 load_criteria(Host, Bindings) ->
 	%% Read existing criteria from database
@@ -236,7 +254,7 @@ load_criteria(Host, Bindings) ->
 											 _ ->
 												 []
 										 end,
-  %% Sort criteria list so "drop" rules go first
+	%% Sort criteria list so "drop" rules go first
 	lists:sort(fun criteria_sort/2, CompiledCriteria).	
 
 get_criteria(Host, Direction) ->
@@ -269,10 +287,29 @@ get_bindings(File) ->
 	{value, Result, _} = erl_eval:exprs(Parsed, []),
 	{ok, Result}.
 
-replace_body(Packet, NewBody) ->
-	OldBodyElem = xml:get_subtag(Packet, "body"),
-	NewBodyElem = exmpp_xml:set_cdata(OldBodyElem, NewBody),
-	exmpp_xml:replace_child(Packet, OldBodyElem, NewBodyElem).
+%% [{msg, MsgBody}, {html, HtmlBody}, {text, TextEl}]
+replace_content(Packet, NewMsg) ->
+	%% Replace <body> content
+	MsgBody = proplists:get_value(NewMsg, msg, undefined),
+	OldBodyElem = exmpp_xml:get_element(Packet, "body"),
+	NewBodyElem = exmpp_xml:set_cdata(OldBodyElem, MsgBody),
+	P1 = exmpp_xml:replace_child(Packet, OldBodyElem, NewBodyElem),
+	%% Replace <html><body> content
+	HtmlBody = proplists:get_value(NewMsg, html, undefined),
+	P2 = case HtmlBody of
+				 undefined -> P1;
+				 H ->
+					OldHtmlElem = exmpp_xml:get_element(Packet, "html"),
+					[NewHtmlBodyEl] = exmpp_xml:parse_document(H),
+					NewHtmlElem = exmpp_xml:set_children(OldHtmlElem, NewHtmlBodyEl),
+					exmpp_xml:replace_child(P1, NewHtmlElem)
+			 end,
+	%% Replace <x><text> content
+	TextBody = proplists:get_value(NewMsg, text, undefined),
+	OldParentTextElem = get_twitter_x_elem(Packet),
+	NewTextEl = exmpp_xml:set_cdata(exmpp_xml:element("text"), TextBody),
+	NewParentTextElem = exmpp_xml:set_children(OldParentTextElem, [NewTextEl]),
+	exmpp_xml:replace_child(Packet, OldParentTextElem, NewParentTextElem).
 
 %% Sort criteria so "drop" rules come first
 criteria_sort({{_, _, "drop", _}, _}, {{_, _, _A, _}, _}) -> 
@@ -281,6 +318,23 @@ criteria_sort({{_, _, A, _}, _}, {{_, _, "drop", _}, _}) when A /= "drop" ->
 	false; 
 criteria_sort(_A, _B) -> 
 	true.
+
+%% Retrieve Twitter text element fro packet, if any
+get_twitter_x_elem(Packet) ->
+	XEls = exmpp_xml:get_elements(Packet, "x"),	
+	case lists:dropwhile(fun(X) -> exmpp_xml:get_attribute(X, "type", undefined) == "tweet" end, XEls)
+			of [] -> undefined;
+				L -> hd(L)
+			end.
+
+%% Turn xml to text
+%% This is quick and dirty way (for xml with children we convert everything, including tags, which shouldn't be part of filtered content)
+to_text(Xmlel) ->
+	C = exmpp_xml:get_child_elements(Xmlel),
+	case C of 
+		[] -> exmpp_xml:get_cdata_as_list(Xmlel);
+		_ ->  exmpp_xml:document_to_list(Xmlel)
+	end.	
 
 test() ->
 	mod_content_filter:start("cleartext.com", [{predicate_bindings, "/opt/ejabberd-2.1.3/conf/cond_bindings.cfg"},
