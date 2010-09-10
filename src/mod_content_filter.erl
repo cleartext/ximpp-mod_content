@@ -209,7 +209,7 @@ inspect_message(HostFrom, HostTo, Packet) ->
 	case R1 of
 		drop -> drop;
 		NewMsg -> 
-			InCriteria = get_criteria(HostTo, in),
+			InCriteria = get_criteria(HostTo, ?INBOUND),
 			inspect_message(NewMsg, InCriteria)
 	end.
 
@@ -311,10 +311,14 @@ replace_content(Packet, NewMsg) ->
 			 end,
 	%% Replace <x><text> content
 	TextBody = proplists:get_value(text, NewMsg, undefined),
-	OldParentTextElem = get_twitter_x_elem(Packet),
-	NewTextEl = exmpp_xml:set_cdata(exmpp_xml:element("text"), TextBody),
-	NewParentTextElem = exmpp_xml:set_children(OldParentTextElem, [NewTextEl]),
-	exmpp_xml:replace_child(Packet, OldParentTextElem, NewParentTextElem).
+	case TextBody of
+		undefined -> P2;
+		T ->
+			OldParentTextElem = get_twitter_x_elem(Packet),
+			NewTextEl = exmpp_xml:set_cdata(exmpp_xml:element("text"), T),
+			NewParentTextElem = exmpp_xml:set_children(OldParentTextElem, [NewTextEl]),
+			exmpp_xml:replace_child(P2, OldParentTextElem, NewParentTextElem)
+	end.
 
 %% Sort criteria so "drop" rules come first
 criteria_sort({{_, _, "drop", _}, _}, {{_, _, _A, _}, _}) -> 
