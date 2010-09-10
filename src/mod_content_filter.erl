@@ -310,7 +310,7 @@ replace_content(Packet, NewMsg) ->
 					 OldHtmlElem = exmpp_xml:get_element(Packet, "html"),
 					 NewHtmlBody = exmpp_xml:parse_document(H),
 					 NewHtmlElem = exmpp_xml:set_children(OldHtmlElem, NewHtmlBody),
-					 exmpp_xml:replace_child(P1, NewHtmlElem)
+					 exmpp_xml:replace_child(P1, OldHtmlElem, NewHtmlElem)
 			 end,
 	%% Replace <x><text> content
 	TextBody = proplists:get_value(text, NewMsg, undefined),
