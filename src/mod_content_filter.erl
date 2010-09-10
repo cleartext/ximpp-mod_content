@@ -23,6 +23,10 @@
 -include("jlib.hrl").
 -include("ejabberd_http.hrl").
 
+%% Direction constants
+-define(BOTH, "0").
+-define(INBOUND, "1").
+-define(OUTBOUND, "2").
 
 -record(state, {host, criteria = [], bindings = []}).
 
@@ -75,7 +79,7 @@ init([Host, Bindings]) ->
 %%--------------------------------------------------------------------
 handle_call({get_criteria, Direction}, _From, State) ->
 	Criteria = lists:filter(fun({{_P, _Args, _Action, D}, _Func}) -> 
-															 D == both orelse D == Direction 
+															 D == ?BOTH orelse D == Direction 
 													end, State#state.criteria),
 	{reply, Criteria, State};
 
@@ -173,8 +177,9 @@ get_filter_name(Host) ->
 filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name == "message" ->
 	?DEBUG("Packet, From, To:~p~n, ~p~n, ~p~n", [Packet, From, To]),
 	
-	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, HostFrom, _Res} = From,		
-	{jid, _PrepAcc, _PrepHost, _PrepRes, _Acc, HostTo, _Res} = To,
+	{jid, _, _, _, _, HostFrom, _} = From,		
+	{jid, _, _, _, _, HostTo, _} = To,
+	
 	case inspect_message(HostFrom, HostTo, Packet)  of
 		drop ->
 			%%{From, To, {xmlelement, Name, [{"flag", "censored"} | Attrs], Els}};
@@ -189,7 +194,7 @@ filter_packet(P) ->
 	P.
 
 inspect_message(HostFrom, HostTo, Packet) ->
-	OutCriteria = get_criteria(HostFrom, out),
+	OutCriteria = get_criteria(HostFrom, ?OUTBOUND),
 	MsgBody = to_text(exmpp_xml:get_element(Packet ,"body")),
 	HtmlBody = case exmpp_xml:get_element(exmpp_xml:get_element(Packet, "html"),
 																				"body") of undefined -> undefined;
@@ -197,9 +202,9 @@ inspect_message(HostFrom, HostTo, Packet) ->
 						 end,
 	%% Twitter-specific element
 	TextBody = case get_twitter_x_elem(Packet) of
-		undefined -> undefined;
-		X -> to_text(exmpp_xml:get_element(X, "text"))
-	end,					 		
+							 undefined -> undefined;
+							 X -> to_text(exmpp_xml:get_element(X, "text"))
+						 end,					 		
 	R1 = inspect_message([{msg, MsgBody}, {html, HtmlBody}, {text, TextBody}], OutCriteria),
 	case R1 of
 		drop -> drop;
@@ -299,10 +304,10 @@ replace_content(Packet, NewMsg) ->
 	P2 = case HtmlBody of
 				 undefined -> P1;
 				 H ->
-					OldHtmlElem = exmpp_xml:get_element(Packet, "html"),
-					[NewHtmlBodyEl] = exmpp_xml:parse_document(H),
-					NewHtmlElem = exmpp_xml:set_children(OldHtmlElem, NewHtmlBodyEl),
-					exmpp_xml:replace_child(P1, NewHtmlElem)
+					 OldHtmlElem = exmpp_xml:get_element(Packet, "html"),
+					 [NewHtmlBodyEl] = exmpp_xml:parse_document(H),
+					 NewHtmlElem = exmpp_xml:set_children(OldHtmlElem, NewHtmlBodyEl),
+					 exmpp_xml:replace_child(P1, NewHtmlElem)
 			 end,
 	%% Replace <x><text> content
 	TextBody = proplists:get_value(NewMsg, text, undefined),
@@ -323,9 +328,9 @@ criteria_sort(_A, _B) ->
 get_twitter_x_elem(Packet) ->
 	XEls = exmpp_xml:get_elements(Packet, "x"),	
 	case lists:dropwhile(fun(X) -> exmpp_xml:get_attribute(X, "type", undefined) == "tweet" end, XEls)
-			of [] -> undefined;
-				L -> hd(L)
-			end.
+		of [] -> undefined;
+		L -> hd(L)
+	end.
 
 %% Turn xml to text
 %% This is quick and dirty way (for xml with children we convert everything, including tags, which shouldn't be part of filtered content)
