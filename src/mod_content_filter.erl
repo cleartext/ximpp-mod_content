@@ -295,12 +295,12 @@ get_bindings(File) ->
 %% [{msg, MsgBody}, {html, HtmlBody}, {text, TextEl}]
 replace_content(Packet, NewMsg) ->
 	%% Replace <body> content
-	MsgBody = proplists:get_value(NewMsg, msg, undefined),
+	MsgBody = proplists:get_value(msg, NewMsg, undefined),
 	OldBodyElem = exmpp_xml:get_element(Packet, "body"),
 	NewBodyElem = exmpp_xml:set_cdata(OldBodyElem, MsgBody),
 	P1 = exmpp_xml:replace_child(Packet, OldBodyElem, NewBodyElem),
 	%% Replace <html><body> content
-	HtmlBody = proplists:get_value(NewMsg, html, undefined),
+	HtmlBody = proplists:get_value(html, NewMsg, undefined),
 	P2 = case HtmlBody of
 				 undefined -> P1;
 				 H ->
@@ -310,7 +310,7 @@ replace_content(Packet, NewMsg) ->
 					 exmpp_xml:replace_child(P1, NewHtmlElem)
 			 end,
 	%% Replace <x><text> content
-	TextBody = proplists:get_value(NewMsg, text, undefined),
+	TextBody = proplists:get_value(text, NewMsg, undefined),
 	OldParentTextElem = get_twitter_x_elem(Packet),
 	NewTextEl = exmpp_xml:set_cdata(exmpp_xml:element("text"), TextBody),
 	NewParentTextElem = exmpp_xml:set_children(OldParentTextElem, [NewTextEl]),
