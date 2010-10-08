@@ -25,8 +25,8 @@ block(MessageBody, TextToBlock, BlockSymbol) when is_list(BlockSymbol) ->
 
 block(MessageBody, TextToBlock, BlockSymbol) ->
 	BlockStr = string:chars(BlockSymbol, string:len(TextToBlock)),
-	{ok, NewBody, _N} = regexp:gsub(MessageBody, TextToBlock, BlockStr),
-	NewBody.
+ re:replace(MessageBody, TextToBlock, BlockStr, [global, caseless, {return, list}]).
+
 %%
 %% Local Functions
 %%
