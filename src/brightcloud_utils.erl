@@ -44,6 +44,7 @@
 %% Exported Functions
 %%
 -export([extract_urls/1, get_scores/5, get_categories/4]).
+-export([compile_rule/1]).
 -export([test/0]).
 
 %%
@@ -58,6 +59,46 @@ extract_urls(Msg) ->
 							end, [], Words),
 	lists:reverse(L).
 
+%% the rule has the form:
+%% categories:code1,code2, ..codeN;reputation:n
+%% Compilation creates a function that returns true if the score (categories + reputation)
+%% passes, otherwise false.
+compile_rule(Rule) ->
+  Fields = string:tokens(Rule, ";"),
+  KeyVals = lists:map(fun(F) ->
+                            [K, V] = string:tokens(F, ":"),
+                             {K,V}
+                      end, Fields),
+  CatString = proplists:get_value("categories", KeyVals, none),
+  RepIndex = proplists:get_value("reputation", KeyVals, none),
+  CatFunc = case CatString of
+              none ->
+                fun(_Categories) ->
+                     true
+                end;
+														_ ->
+																CatCodes = string:tokens(CatString, ","),
+																fun(Categories) ->
+																		 lists:all(fun(C) ->
+                              not lists:member(C, CatCodes)
+                                end,   
+                                 Categories)
+                end
+            end,   
+  RepFunc = case RepIndex of
+              none ->
+                fun(_Rep) ->
+                     true
+                end;
+              _ ->
+                fun(Reputation) ->
+                     RepIndex =< Reputation
+                end
+            end,
+  fun(Categories, Reputation) ->
+        CatFunc(Categories) andalso RepFunc(Reputation)
+  end.              
+  
 get_categories(ServiceUrl, UID, ProductId, OemId) ->
 	inets:start(),
 	crypto:start(),
@@ -99,9 +140,7 @@ process_xml(XML, get_scores) ->
     exmpp_xml:get_element(XML, "response"),
     "bcri")),
   Categories = lists:map(fun(C) ->
-                 CatId = exmpp_xml:get_cdata_as_list(exmpp_xml:get_element(C, "catid")),
-                 Confidence = exmpp_xml:get_cdata_as_list(exmpp_xml:get_element(C, "conf")),
-                 [{catid, CatId}, {confidence, Confidence}]
+                 exmpp_xml:get_cdata_as_list(exmpp_xml:get_element(C, "catid"))                
             end, Scores),
   {Reputation, Categories};
 
@@ -131,3 +170,27 @@ test() ->
 	lists:map(fun(URI) ->
                      get_scores(URI, ?TEST_BRIGHTCLOUD_SERVICE, ?TEST_UID, ?TEST_PRODUCTID, ?TEST_OEMID)
                end, URLs).
+
+
+%% f() ->
+%%   fun(Msg, Rule, Action, _Direction, Host) ->
+%% 
+%% 											 URLs = brightcloud_utils:extract_urls(Msg),
+%% 											 case URLs of
+%% 											 [] -> {keep, Msg};
+%% 											 _ ->
+%% 												 Predicate = brightcloud_utils:compile_rule(Rule),						  
+%% 												 ScoresFunc = fun(URL) -> Predicate(mod_brightcloud:get_scores(Host, URL)) end,
+%% 												 case Action of 
+%% 													 "drop" -> 
+%% 														 case lists:any(fun(S) -> ScoresFunc(S) end, URLs) of
+%% 															 true -> drop;
+%% 															 false -> {keep, Msg}
+%% 														 end;	
+%% 													 "block" -> 	
+%% 														 NewMsg = lists:foldl(fun(U, M) -> content_utils:block(M, U, "*") end, Msg, URLs),
+%% 														 {keep, NewMsg}
+%% 												 end
+%% 											 end	 
+%% 		end.			 
+  
