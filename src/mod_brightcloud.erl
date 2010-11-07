@@ -15,7 +15,7 @@
 
 %% --------------------------------------------------------------------
 %% External exports
--export([start/2, stop/1, get_scores/2]).
+-export([start/2, stop/1, start_link/2, get_scores/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -28,16 +28,19 @@
 %%--------------------------------------------------------------------
 %%% gen_mod behavior
 %%--------------------------------------------------------------------
+start_link(Host, Opts) ->
+  Proc = gen_mod:get_module_proc(Host, ?PROCNAME),
+  gen_server:start_link({local, Proc}, ?MODULE, [Host, Opts], []).
+
 start(Host, Opts) ->
-  ServiceProc = gen_mod:get_module_proc(Host, ?PROCNAME),
-  ServiceChildSpec =
-	{ServiceProc,
-	 {gen_server, start_link, [{local, ServiceProc}, ?MODULE, [Host, Opts], []]},
-	 permanent,
+  Proc = gen_mod:get_module_proc(Host, ?PROCNAME),
+  ChildSpec =
+    {Proc,
+     {?MODULE, start_link, [Host, Opts]},
 	 2000,
 	 worker,
-	 [gen_server]},
-    supervisor:start_child(ejabberd_sup, ServiceChildSpec),
+	 [?MODULE]},
+    supervisor:start_child(ejabberd_sup, ChildSpec),
 		?DEBUG("BrighCloud service started on ~p~n", [Host]).
 
 stop(Host) ->
