@@ -27,7 +27,7 @@
 <seqnum>" ++ exmpp_utils:random_id("brightcloud") ++ "</seqnum>
 <encrypt-type>none</encrypt-type>
 <request>
-<method>geturiinfo</method>
+<method>geturiinfoex</method>
 <uid>" ++ UID ++ "</uid>
 <productid>" ++ ProductId ++ "</productid> 
 <oemid>"++ OemId ++ "</oemid>
@@ -95,11 +95,15 @@ process_xml(XML, get_scores) ->
     exmpp_xml:get_element(XML, "response"),
     "categories"),
   "cat"),
-  lists:map(fun(C) ->
+  Reputation =  exmpp_xml:get_cdata_as_list(exmpp_xml:get_element(
+    exmpp_xml:get_element(XML, "response"),
+    "bcri")),
+  Categories = lists:map(fun(C) ->
                  CatId = exmpp_xml:get_cdata_as_list(exmpp_xml:get_element(C, "catid")),
                  Confidence = exmpp_xml:get_cdata_as_list(exmpp_xml:get_element(C, "conf")),
                  [{catid, CatId}, {confidence, Confidence}]
-            end, Scores);
+            end, Scores),
+  {Reputation, Categories};
 
 process_xml(XML, get_categories) ->
   Categories = exmpp_xml:get_elements(
@@ -111,7 +115,7 @@ process_xml(XML, get_categories) ->
                  CatId = exmpp_xml:get_cdata_as_list(exmpp_xml:get_element(C, "catid")),
                  CatName = exmpp_xml:get_cdata_as_list(exmpp_xml:get_element(C, "catname")),
                  CatGroup = exmpp_xml:get_cdata_as_list(exmpp_xml:get_element(C, "catgroup")),
-                 [{catid, CatId}, {catname, CatName}, {catgroup, CatGroup}]
+                 {CatId, [{catname, CatName}, {catgroup, CatGroup}]}
     								end, Categories);
 
 process_xml(_XML, RequestType) ->

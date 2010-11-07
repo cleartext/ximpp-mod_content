@@ -152,19 +152,10 @@ start(Host, Opts) ->
 	ejabberd_hooks:add(webadmin_page_host, Host, filter_interface, web_page_host, 50),
 	BindingFile = proplists:get_value(predicate_bindings, Opts, []),
 	{ok, Bindings} = get_bindings(BindingFile),
-	start_link(Host, Bindings),
-	%% Start WebRoot service
-	WebRootURL = proplists:get_value(webroot_url, Opts, none),
-	WebRootUser = proplists:get_value(webroot_user, Opts, none),
-	WebRootPasswd = proplists:get_value(webroot_password, Opts, none),
-	case WebRootURL of
-		none -> ok;
-		_ -> webroot_service:start_link(Host, WebRootURL, WebRootUser, WebRootPasswd)
-	end.
+	start_link(Host, Bindings).
 
 stop(Host) ->
 	gen_server:cast(get_filter_name(Host), stop),
-	webroot_service:stop(Host),
 	ejabberd_hooks:delete(filter_packet, global, ?MODULE, filter_packet, 50).
 
 %%--------------------------------------------------------------------

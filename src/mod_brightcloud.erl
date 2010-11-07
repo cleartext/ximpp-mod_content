@@ -5,8 +5,9 @@
 %%%
 %%% Created : Oct 27, 2010 
 %%%-------------------------------------------------------------------
--module(brightcloud_service).
+-module(mod_brightcloud).
 
+-behaviour(gen_mod).
 -behaviour(gen_server).
 %% --------------------------------------------------------------------
 %% Include files
@@ -14,24 +15,24 @@
 
 %% --------------------------------------------------------------------
 %% External exports
--export([start_link/5, stop/1, get_scores/2]).
+-export([start/2, stop/1, get_scores/2]).
 
 %% gen_server callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([init/2, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("ejabberd.hrl").
 -define(DEFAULT_TIMEOUT, 10000).
+-define(PROCNAME, ejabberd_mod_brightcloud).
 -record(state, {service_url, uid, product_id, oem_id, categories = dict:new()}).
 
-%% ====================================================================
-%% External functions
-%% ====================================================================
-start_link(Host, ServiceUrl, UID, ProductId, OemId) ->
-	ServiceName = get_service_name(Host),
-  ServiceProc = gen_mod:get_module_proc(Host, ServiceName),
+%%--------------------------------------------------------------------
+%%% gen_mod behavior
+%%--------------------------------------------------------------------
+start(Host, Opts) ->
+  ServiceProc = gen_mod:get_module_proc(Host, ?PROCNAME),
   ServiceChildSpec =
 	{ServiceProc,
-	 {gen_server, start_link, [{local, ServiceName}, ?MODULE, [ServiceUrl, UID, ProductId, OemId], []]},
+	 {gen_server, start_link, [{local, ServiceProc}, ?MODULE, Opts, []]},
 	 permanent,
 	 2000,
 	 worker,
@@ -39,11 +40,22 @@ start_link(Host, ServiceUrl, UID, ProductId, OemId) ->
     supervisor:start_child(ejabberd_sup, ServiceChildSpec),
 		?DEBUG("BrighCloud service started on ~p~n", [Host]).
 
-get_scores(Host, URLs) ->
-        gen_server:call(get_service_name(Host), {get_scores, URLs}, ?DEFAULT_TIMEOUT).
-
 stop(Host) ->
-        gen_server:cast(get_service_name(Host), stop).
+  Proc = gen_mod:get_module_proc(Host, ?PROCNAME),
+  ?DEBUG("Stopping server ~p~n", [Proc]),  
+  gen_server:call(Proc, stop),
+  supervisor:delete_child(ejabberd_sup, Proc).
+
+
+
+%% ====================================================================
+%% External functions
+%% ====================================================================
+
+get_scores(Host, URLs) ->
+  Proc = gen_mod:get_module_proc(Host, ?PROCNAME),
+        gen_server:call(Proc, {get_scores, URLs}, ?DEFAULT_TIMEOUT).
+
 %% ====================================================================
 %% Server functions
 %% ====================================================================
@@ -56,7 +68,12 @@ stop(Host) ->
 %%          ignore               |
 %%          {stop, Reason}
 %% --------------------------------------------------------------------
-init([ServiceUrl, UID, ProductId, OemId]) ->
+init(Host, Opts) ->
+  ServiceUrl = proplists:get_value(service_url, Opts),
+  UID = proplists:get_value(uid, Opts),
+  ProductId = proplists:get_value(product_id, Opts),
+  OemId = proplists:get_value(oem_id, Opts),
+
     {ok, #state{service_url = ServiceUrl, uid = UID, product_id = ProductId, oem_id = OemId, categories = dict:new()}, 0}.
 
 %% --------------------------------------------------------------------
@@ -98,8 +115,8 @@ handle_cast(_Msg, State) ->
 %%          {stop, Reason, State}            (terminate/2 is called)
 %% --------------------------------------------------------------------
 handle_info(timeout, #state{service_url = ServiceUrl, uid = UID, product_id = ProductId, oem_id = OemId} = State) ->
-  brightcloud_utils:get_categories(ServiceUrl, UID, ProductId, OemId),
-		{noreply, State};
+  Categories = brightcloud_utils:get_categories(ServiceUrl, UID, ProductId, OemId),
+		{noreply, State#state{categories = dict:from_list(Categories)}};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -122,6 +139,4 @@ code_change(_OldVsn, State, _Extra) ->
 %% --------------------------------------------------------------------
 %%% Internal functions
 %% --------------------------------------------------------------------
-get_service_name(Host) ->
-        A = atom_to_list(?MODULE),
-        list_to_atom(A ++ "_" ++ Host).
+
