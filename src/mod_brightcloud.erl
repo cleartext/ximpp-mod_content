@@ -18,12 +18,12 @@
 -export([start/2, stop/1, get_scores/2]).
 
 %% gen_server callbacks
--export([init/2, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -include("ejabberd.hrl").
 -define(DEFAULT_TIMEOUT, 10000).
 -define(PROCNAME, ejabberd_mod_brightcloud).
--record(state, {service_url, uid, product_id, oem_id, categories = dict:new()}).
+-record(state, {host, service_url, uid, product_id, oem_id, categories = dict:new()}).
 
 %%--------------------------------------------------------------------
 %%% gen_mod behavior
@@ -32,7 +32,7 @@ start(Host, Opts) ->
   ServiceProc = gen_mod:get_module_proc(Host, ?PROCNAME),
   ServiceChildSpec =
 	{ServiceProc,
-	 {gen_server, start_link, [{local, ServiceProc}, ?MODULE, Opts, []]},
+	 {gen_server, start_link, [{local, ServiceProc}, ?MODULE, [Host, Opts], []]},
 	 permanent,
 	 2000,
 	 worker,
@@ -68,13 +68,13 @@ get_scores(Host, URLs) ->
 %%          ignore               |
 %%          {stop, Reason}
 %% --------------------------------------------------------------------
-init(Host, Opts) ->
+init([Host, Opts]) ->
   ServiceUrl = proplists:get_value(service_url, Opts),
   UID = proplists:get_value(uid, Opts),
   ProductId = proplists:get_value(product_id, Opts),
   OemId = proplists:get_value(oem_id, Opts),
 
-    {ok, #state{service_url = ServiceUrl, uid = UID, product_id = ProductId, oem_id = OemId, categories = dict:new()}, 0}.
+    {ok, #state{host = Host, service_url = ServiceUrl, uid = UID, product_id = ProductId, oem_id = OemId, categories = dict:new()}, 0}.
 
 %% --------------------------------------------------------------------
 %% Function: handle_call/3
