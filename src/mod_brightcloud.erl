@@ -93,6 +93,10 @@ handle_call({get_scores, URLs}, _From, #state{service_url = ServiceUrl, uid = UI
     Reply = brightcloud_utils:get_scores(URLs, ServiceUrl, UID, ProductId, OemId),
     {reply, Reply, State};
 
+handle_call(stop, _From, State) ->
+  ?DEBUG("Stopping BrighCloud service...~nState:~p~n", [State]),  
+  {stop, normal, ok, State};
+
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
