@@ -44,7 +44,7 @@
 %% Exported Functions
 %%
 -export([extract_urls/1, get_scores/5, get_categories/4]).
--export([compile_rule/1]).
+-export([compile_rule/1, url_check/5]).
 -export([test/0]).
 
 %%
@@ -172,25 +172,32 @@ test() ->
                end, URLs).
 
 
-%% f() ->
-%%   fun(Msg, Rule, Action, _Direction, Host) ->
-%% 
-%% 											 URLs = brightcloud_utils:extract_urls(Msg),
-%% 											 case URLs of
-%% 											 [] -> {keep, Msg};
-%% 											 _ ->
-%% 												 Predicate = brightcloud_utils:compile_rule(Rule),						  
-%% 												 ScoresFunc = fun(URL) -> Predicate(mod_brightcloud:get_scores(Host, URL)) end,
-%% 												 case Action of 
-%% 													 "drop" -> 
-%% 														 case lists:any(fun(S) -> ScoresFunc(S) end, URLs) of
-%% 															 true -> drop;
-%% 															 false -> {keep, Msg}
-%% 														 end;	
-%% 													 "block" -> 	
-%% 														 NewMsg = lists:foldl(fun(U, M) -> content_utils:block(M, U, "*") end, Msg, URLs),
-%% 														 {keep, NewMsg}
-%% 												 end
-%% 											 end	 
-%% 		end.			 
-  
+url_check(Msg, Rule, Action, _Direction, Host) ->  
+  URLs = brightcloud_utils:extract_urls(Msg),
+  case URLs of
+    [] -> {keep, Msg};
+    _ ->
+      Predicate = brightcloud_utils:compile_rule(Rule),						  
+      ScoresFunc = fun(URL) -> 
+                        {URL, Scores} = mod_brightcloud:get_scores(Host, URL), 
+                        {Reputation, Categories} = Scores,
+                        Predicate(Reputation, Categories)
+                   end,
+      case Action of 
+        "drop" -> 
+          case lists:any(fun(S) -> ScoresFunc(S) end, URLs) of
+            true -> drop;
+            false -> {keep, Msg}
+          end;	
+        "block" -> 	
+          NewMsg = lists:foldl(fun(U, M) -> 
+                                    case ScoresFunc(U) of
+                                      true ->
+                                        content_utils:block(M, U, "*");
+                                      false ->
+                                        M
+                                    end
+                               end, Msg, URLs),
+          {keep, NewMsg}
+      end
+  end.

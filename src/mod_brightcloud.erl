@@ -33,6 +33,7 @@ start_link(Host, Opts) ->
   gen_server:start_link({local, Proc}, ?MODULE, [Host, Opts], []).
 
 start(Host, Opts) ->
+  exmpp:start(),
   Proc = gen_mod:get_module_proc(Host, ?PROCNAME),
   ChildSpec =
     {Proc,
