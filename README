@@ -10,7 +10,7 @@ What is a condition record?
 Condition consists of predicate and argument string. For example, {"contains", "hell"} means "message contains 'hell' ". The exact meaning of condition is determined by condition binding code (see below).
 
 How to add/remove/change a condition record?
-By using MySQL's INSERT/DELETE/UPDATE statements. For example, below code adds 2 condition records:
+By using MySQL's INSERT/DELETE/UPDATE statements. For example, following code adds 2 condition records:
 
 INSERT INTO criteria (host, predicate, arguments, action, direction) VALUES ("myhost.com", "contains", "site sucks", "drop", "0"), ("myhost.com", "contains_any", "bad_word1;bad_word2", "block", "0");
 
