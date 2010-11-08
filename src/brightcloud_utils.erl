@@ -171,7 +171,6 @@ test() ->
                      get_scores(URI, ?TEST_BRIGHTCLOUD_SERVICE, ?TEST_UID, ?TEST_PRODUCTID, ?TEST_OEMID)
                end, URLs).
 
-
 url_check(Msg, Rule, Action, _Direction, Host) ->  
   URLs = brightcloud_utils:extract_urls(Msg),
   case URLs of

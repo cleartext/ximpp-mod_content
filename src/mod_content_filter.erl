@@ -11,7 +11,7 @@
 -behavior(gen_mod).
 
 -export([start/2, stop/1, filter_packet/1, reload_rules/1]).
--export([test/0]).
+
 
 %% API
 
@@ -340,9 +340,3 @@ to_text(Xmlel) ->
 		_ ->  exmpp_xml:document_to_list(Xmlel)
 	end.	
 
-test() ->
-	mod_content_filter:start("cleartext.com", [{predicate_bindings, "/opt/ejabberd-2.1.3/conf/cond_bindings.cfg"},
-																						 {webroot_url, "http://72.5.172.35:3128/wwss_url_checker"},
-																						 {webroot_user, "test@tagged.com"},
-																						 {webroot_password, "wrtest"}
-																						]).
