@@ -37,6 +37,7 @@ start(Host, Opts) ->
   ChildSpec =
     {Proc,
      {?MODULE, start_link, [Host, Opts]},
+     permanent,
 	 2000,
 	 worker,
 	 [?MODULE]},
