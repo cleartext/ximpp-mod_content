@@ -310,7 +310,7 @@ replace_content(Packet, NewMsg) ->
 		T ->
 			?DEBUG("twitter text:~p~n", [T]),
 			OldParentTextElem = exmpp_xml:xmlel_to_xmlelement(get_twitter_x_elem(Packet)),
-			NewTextEl = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:set_cdata(exmpp_xml:element("text")), T),
+			NewTextEl = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:set_cdata(exmpp_xml:element("text"), T)),
 			NewParentTextElem = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:set_children(OldParentTextElem, [NewTextEl])),
 			exmpp_xml:replace_child(P2, OldParentTextElem, NewParentTextElem)
 	end.
