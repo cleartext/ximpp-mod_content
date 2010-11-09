@@ -290,7 +290,7 @@ replace_content(Packet, NewMsg) ->
 	%% Replace <body> content
 	MsgBody = proplists:get_value(msg, NewMsg, undefined),
 	OldBodyElem = exmpp_xml:get_element(Packet, "body"),
-	NewBodyElem = exmpp_xml:set_cdata(OldBodyElem, MsgBody),
+	NewBodyElem = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:set_cdata(OldBodyElem, MsgBody)),
 	P1 = exmpp_xml:replace_child(Packet, OldBodyElem, NewBodyElem),
 	%% Replace <html><body> content
 	HtmlBody = proplists:get_value(html, NewMsg, undefined),
@@ -299,8 +299,8 @@ replace_content(Packet, NewMsg) ->
 				 H ->
 					 ?DEBUG("html markup: ~p~nPacket:~p~n ", [H, Packet]),
 					 OldHtmlElem = exmpp_xml:get_element(Packet, "html"),
-					 NewHtmlBody = exmpp_xml:parse_document(H),
-					 NewHtmlElem = exmpp_xml:set_children(OldHtmlElem, NewHtmlBody),
+					 NewHtmlBody = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:parse_document(H)),
+					 NewHtmlElem = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:set_children(OldHtmlElem, NewHtmlBody)),
 					 exmpp_xml:replace_child(P1, OldHtmlElem, NewHtmlElem)
 			 end,
 	%% Replace <x><text> content
@@ -309,9 +309,9 @@ replace_content(Packet, NewMsg) ->
 		undefined -> P2;
 		T ->
 			?DEBUG("twitter text:~p~n", [T]),
-			OldParentTextElem = get_twitter_x_elem(Packet),
-			NewTextEl = exmpp_xml:set_cdata(exmpp_xml:element("text"), T),
-			NewParentTextElem = exmpp_xml:set_children(OldParentTextElem, [NewTextEl]),
+			OldParentTextElem = exmpp_xml:xmlel_to_xmlelement(get_twitter_x_elem(Packet)),
+			NewTextEl = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:set_cdata(exmpp_xml:element("text")), T),
+			NewParentTextElem = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:set_children(OldParentTextElem, [NewTextEl])),
 			exmpp_xml:replace_child(P2, OldParentTextElem, NewParentTextElem)
 	end.
 
