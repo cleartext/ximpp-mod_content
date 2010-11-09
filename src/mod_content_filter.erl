@@ -299,8 +299,8 @@ replace_content(Packet, NewMsg) ->
 				 H ->
 					 ?DEBUG("html markup: ~p~nPacket:~p~n ", [H, Packet]),
 					 OldHtmlElem = exmpp_xml:get_element(Packet, "html"),
-					 NewHtmlBody = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:parse_document(H)),
-					 NewHtmlElem = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:set_children(OldHtmlElem, NewHtmlBody)),
+					 NewHtmlBody = xml_stream:parse_element(H),
+					 NewHtmlElem = exmpp_xml:xmlel_to_xmlelement(exmpp_xml:set_children(OldHtmlElem, [NewHtmlBody])),
 					 exmpp_xml:replace_child(P1, OldHtmlElem, NewHtmlElem)
 			 end,
 	%% Replace <x><text> content
