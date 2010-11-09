@@ -177,7 +177,7 @@ filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name 
 			?INFO_MSG("Dropped by content filter:~p", [Packet]),
 			drop;
 		NewMsgBody ->
-			{From, To, replace_content(Packet, NewMsgBody)}
+			{From, To, exmpp_xml:xmlel_to_xmlelement(replace_content(Packet, NewMsgBody))}
 	end;
 
 filter_packet(P) ->
