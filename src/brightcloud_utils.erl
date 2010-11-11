@@ -52,7 +52,7 @@
 %%
 extract_urls(Msg) ->
 	Words = string:tokens(Msg, " ,"),
-	L = lists:foldl(fun(W, Acc) -> case http_uri:parse(W) of
+	L = lists:foldl(fun(W, Acc) -> case parse_uri(W) of
 															 {error, _Reason} -> Acc;
 															 _Other -> [W | Acc]
 														 end
@@ -201,6 +201,16 @@ url_check(Msg, Rule, Action, _Direction, Host) ->
           {keep, NewMsg}
       end
   end.
+
+parse_uri(Word) ->
+  W = case string:str(Word, "www") of
+    1 ->
+      "http://" ++ Word;
+    _ ->
+      Word
+      end,
+  http_uri:parse(W).
+
 
 full_uri(URI) ->
 	case string:str(URI, "http://") of
