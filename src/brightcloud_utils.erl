@@ -203,7 +203,7 @@ url_check(Msg, Rule, Action, _Direction, Host) ->
   end.
 
 parse_uri(Word) ->
-  W = case string:str(Word, "www") of
+  W = case string:str(Word, "www.") of
     1 ->
       "http://" ++ Word;
     _ ->
