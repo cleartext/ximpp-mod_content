@@ -180,7 +180,7 @@ url_check(Msg, Rule, Action, _Direction, Host) ->
       ScoresFunc = fun(URL) -> 
                         {URL, Scores} = mod_brightcloud:get_scores(Host, URL), 
                         {Reputation, Categories} = Scores,
-                        Predicate(Reputation, Categories)
+                        Predicate(Categories, Reputation)
                    end,
       case Action of 
         "drop" -> 
