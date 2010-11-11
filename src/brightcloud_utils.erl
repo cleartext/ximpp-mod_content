@@ -177,20 +177,20 @@ url_check(Msg, Rule, Action, _Direction, Host) ->
     [] -> {keep, Msg};
     _ ->
       Predicate = brightcloud_utils:compile_rule(Rule),						  
-      ScoresFunc = fun(URL) -> 
+      PassFunc = fun(URL) -> 
                         {URL, Scores} = mod_brightcloud:get_scores(Host, URL), 
                         {Reputation, Categories} = Scores,
                         Predicate(Categories, Reputation)
                    end,
       case Action of 
         "drop" -> 
-          case lists:any(fun(S) -> ScoresFunc(S) end, URLs) of
+          case lists:any(fun(S) -> not PassFunc(S) end, URLs) of
             true -> drop;
             false -> {keep, Msg}
           end;	
         "block" -> 	
           NewMsg = lists:foldl(fun(U, M) -> 
-                                    case ScoresFunc(U) of
+                                    case not PassFunc(U) of
                                       true ->
                                         content_utils:block(M, U, "*");
                                       false ->
