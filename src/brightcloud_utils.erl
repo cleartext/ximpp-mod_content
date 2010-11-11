@@ -110,7 +110,8 @@ get_scores(URI, ServiceUrl, UID, ProductId, OemId) ->
 	inets:start(),
 	crypto:start(),	
  MIME = "application/x-www-form-urlencoded",
- {ok, R} = http:request(post, {ServiceUrl, [], MIME, ?GET_URIINFO_REQUEST(URI, UID, ProductId, OemId)}, [], []),
+
+ {ok, R} = http:request(post, {ServiceUrl, [], MIME, ?GET_URIINFO_REQUEST(full_uri(URI), UID, ProductId, OemId)}, [], []),
 	{URI, parse_response(R, get_scores)}.
 
 
@@ -200,3 +201,11 @@ url_check(Msg, Rule, Action, _Direction, Host) ->
           {keep, NewMsg}
       end
   end.
+
+full_uri(URI) ->
+	case string:str(URI, "http://") of
+             1 ->
+               URI;
+             _ ->
+               "http://" ++ URI
+           end.
