@@ -43,22 +43,13 @@
 %%
 %% Exported Functions
 %%
--export([extract_urls/1, get_scores/5, get_categories/4]).
+-export([get_scores/5, get_categories/4]).
 -export([compile_rule/1, url_check/5]).
 -export([test/0]).
 
 %%
 %% API Functions
 %%
-extract_urls(Msg) ->
-	Words = string:tokens(Msg, " ,"),
-	L = lists:foldl(fun(W, Acc) -> 
-			W1 = cut_tags(W),
-			case parse_uri(W1) of
-															 {error, _Reason} -> Acc;												 _Other -> [W1 | Acc]
-														 end
-							end, [], Words),
-	lists:reverse(L).
 
 %% the rule has the form:
 %% categories:code1,code2, ..codeN;reputation:n
@@ -112,7 +103,7 @@ get_scores(URI, ServiceUrl, UID, ProductId, OemId) ->
 	crypto:start(),	
  MIME = "application/x-www-form-urlencoded",
 
- {ok, R} = http:request(post, {ServiceUrl, [], MIME, ?GET_URIINFO_REQUEST(full_uri(URI), UID, ProductId, OemId)}, [], []),
+ {ok, R} = http:request(post, {ServiceUrl, [], MIME, ?GET_URIINFO_REQUEST(content_utils:full_uri(URI), UID, ProductId, OemId)}, [], []),
 	{URI, parse_response(R, get_scores)}.
 
 
@@ -168,7 +159,7 @@ test() ->
 	Yahoo = "http://google.com",
 	Ibm = "http://www.ibm.com",
 	YouTube ="http://www.youtube.com",
-	URLs = extract_urls(lists:flatten(io_lib:format("Hello, check this out: ~s, also ~s and ~s . Enjoy!", [Yahoo, Ibm, YouTube]))),
+	URLs = content_utils:extract_urls(lists:flatten(io_lib:format("Hello, check this out: ~s, also ~s and ~s . Enjoy!", [Yahoo, Ibm, YouTube]))),
 	lists:map(fun(URI) ->
                      get_scores(URI, ?TEST_BRIGHTCLOUD_SERVICE, ?TEST_UID, ?TEST_PRODUCTID, ?TEST_OEMID)
                end, URLs).
@@ -203,30 +194,3 @@ url_check(Msg, Rule, Action, _Direction, Host) ->
       end
   end.
 
-parse_uri(Word) ->
-  W = case string:str(Word, "www.") of
-    1 ->
-      "http://" ++ Word;
-    _ ->
-      Word
-      end,
-    http_uri:parse(W).
-
-cut_tags(W) ->
-    %% Cut out closing tag
-    case string:str(W, "</") of
-	      0 ->
-	              W;
-		            P ->
-			            string:sub_string(W, 1, P - 1)
-				            end.
-
-
-
-full_uri(URI) ->
-	case string:str(URI, "http://") of
-             1 ->
-               URI;
-             _ ->
-               "http://" ++ URI
-           end.
