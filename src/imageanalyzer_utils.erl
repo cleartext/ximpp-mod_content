@@ -52,8 +52,13 @@
 %% sensitivity can take either number 0 to 100, low_false_positive (=65) or low_false_negatives (=75)
 compile_rule(Rule) ->
   Fields = string:tokens(Rule, ";"),
-		Filter = proplists:get_value("filter", Fields, "safe"),
-  Sensitivity = proplists:get_value("sensitivity", Fields, ?LOW_FALSE_POSITIVE),
+  KeyVals = lists:map(fun(F) ->
+                              [K, V] = string:tokens(F, ":"),
+			                                   {K,V}
+							                         end, Fields),  
+										 		Filter = proplists:get_value("filter", KeyVals, "safe"),
+												  Sensitivity = proplists:get_value("sensitivity", KeyVals, ?LOW_FALSE_POSITIVE),
+
   {make_score_fun(Filter), calc_sensitivity(Sensitivity)}.
 
 
@@ -89,7 +94,7 @@ get_score(ImageUrl, ServiceUrl, Sensitivity, Token) ->
 	crypto:start(),	
       {ok, {{_, ResponseCode, _}, 
             _Fields, 
-            ResponseBody}} = httpc:request(post, {?SERVICE_URL, 
+            ResponseBody}} = http:request(post, {?SERVICE_URL, 
                                                   [{"SOAPAction", ?SOAP_ACTION}], "text/xml; charset=utf-8",
                                                   ?SOAP_ENVELOPE(ImageUrl, integer_to_list(Sensitivity), Token)}, [], []),
       [R] = exmpp_xml:parse_document(ResponseBody),
@@ -126,7 +131,7 @@ image_check(Msg, Rule, Action, _Direction, _Host) ->
     _ ->
       {Predicate, Sensitivity} = imageanalyzer_utils:compile_rule(Rule),						  
       PassFunc = fun(URL) -> 
-                        Score = imageanalyzer_utils:get_score(URL, ?SERVICE_URL, Sensitivity, ?TOKEN), 
+                        {_Url, Score} = imageanalyzer_utils:get_score(URL, ?SERVICE_URL, Sensitivity, ?TOKEN), 
                         Predicate(Score)
                    end,
       case Action of 
