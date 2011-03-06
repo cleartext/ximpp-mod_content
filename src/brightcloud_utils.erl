@@ -52,9 +52,10 @@
 %%
 extract_urls(Msg) ->
 	Words = string:tokens(Msg, " ,"),
-	L = lists:foldl(fun(W, Acc) -> case parse_uri(W) of
-															 {error, _Reason} -> Acc;
-															 _Other -> [W | Acc]
+	L = lists:foldl(fun(W, Acc) -> 
+			W1 = cut_tags(W),
+			case parse_uri(W1) of
+															 {error, _Reason} -> Acc;												 _Other -> [W1 | Acc]
 														 end
 							end, [], Words),
 	lists:reverse(L).
@@ -209,7 +210,17 @@ parse_uri(Word) ->
     _ ->
       Word
       end,
-  http_uri:parse(W).
+    http_uri:parse(W).
+
+cut_tags(W) ->
+    %% Cut out closing tag
+    case string:str(W, "</") of
+	      0 ->
+	              W;
+		            P ->
+			            string:sub_string(W, 1, P - 1)
+				            end.
+
 
 
 full_uri(URI) ->
