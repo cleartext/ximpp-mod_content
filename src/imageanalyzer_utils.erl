@@ -25,8 +25,8 @@
 -define(SERVICE_URL, "http://test.image-analyzer-dev.com/scan.asmx").
 -define(SOAP_ACTION, "http://test.image-analyzer-dev.com/ScanImageURL").
 
--define(LOW_FALSE_POSITIVE, 65).
--define(LOW_FALSE_NEGATIVE, 75).
+-define(LOW_FALSE_POSITIVE, "65").
+-define(LOW_FALSE_NEGATIVE, "75").
 -define(MAX_SAFE_SCORE, 75).
 
 -define(TOKEN, "cleartext").
@@ -96,7 +96,7 @@ get_score(ImageUrl, ServiceUrl, Sensitivity, Token) ->
             _Fields, 
             ResponseBody}} = http:request(post, {?SERVICE_URL, 
                                                   [{"SOAPAction", ?SOAP_ACTION}], "text/xml; charset=utf-8",
-                                                  ?SOAP_ENVELOPE(ImageUrl, integer_to_list(Sensitivity), Token)}, [], []),
+                                                  ?SOAP_ENVELOPE(ImageUrl, Sensitivity, Token)}, [], []),
       [R] = exmpp_xml:parse_document(ResponseBody),
       ResponseXml = exmpp_xml:get_path(R, 
                                        [{element, "Body"}, 
