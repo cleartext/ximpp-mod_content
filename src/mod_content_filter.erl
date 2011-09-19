@@ -65,6 +65,7 @@ reload_rules(Host) ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([Host, Bindings]) ->
+    init_audit_table(Host),
 	CList = load_criteria(Host, Bindings),
 	{ok, #state{host = Host, criteria = CList, bindings = Bindings}}.
 
@@ -172,11 +173,15 @@ filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name 
 	{jid, _, _, _, _, HostTo, _} = To,
 	
 	case inspect_message(HostFrom, HostTo, Packet)  of
-		drop ->
-			%%{From, To, {xmlelement, Name, [{"flag", "censored"} | Attrs], Els}};
+		{drop, Predicate, Text} ->			
 			?INFO_MSG("Dropped by content filter:~p", [Packet]),
+   spawn(fun() ->
+                 MyHost = hd(ejabberd_config:get_global_option(hosts)),
+                 add_audit_record(MyHost, From, To, Predicate, Text, get_explanation(Predicate))
+         end),
+
 			drop;
-		NewMsgBody ->
+		{ok, NewMsgBody} ->
 			{From, To, exmpp_xml:xmlel_to_xmlelement(replace_content(Packet, NewMsgBody))}
 	end;
 
@@ -198,17 +203,19 @@ inspect_message(HostFrom, HostTo, Packet) ->
 						 end,					 		
 	R1 = inspect_message([{msg, MsgBody}, {html, HtmlBody}, {text, TextBody}], OutCriteria),
 	case R1 of
-		drop -> drop;
-		NewMsg -> 
+		{ok, NewMsg} -> 
 			InCriteria = get_criteria(HostTo, ?INBOUND),
-			inspect_message(NewMsg, InCriteria)
+			inspect_message(NewMsg, InCriteria);
+  Drop ->
+      Drop
 	end.
 
 inspect_message(Msg, undefined) ->
 	Msg;
 
 inspect_message(Msg, Criteria) ->
-	catch(lists:foldl(
+    try 
+	NewMsg = lists:foldl(
 					fun({Predicate, CrFun}, AccMsg) -> 												 
 							 %% Loop over message parts
 							 lists:foldl(
@@ -218,7 +225,7 @@ inspect_message(Msg, Criteria) ->
 											FilteredText = 
 												try CrFun(Text) of 
 													drop -> 
-														throw(drop);
+														throw({drop, Predicate, Text});
 													keep ->
 														Text;
 													{keep, NewText} ->
@@ -231,7 +238,11 @@ inspect_message(Msg, Criteria) ->
 											[{Type, FilteredText} | Acc]
 								 end,				 
 								 [], AccMsg)
-					end, Msg, Criteria)).
+					end, Msg, Criteria), 
+ 				{ok, NewMsg}
+    catch throw:Drop ->
+              Drop
+    end.
 
 load_criteria(Host, Bindings) ->
 	%% Read existing criteria from database
@@ -340,3 +351,37 @@ to_text(Xmlel) ->
 		_ ->  exmpp_xml:document_to_list(Xmlel)
 	end.	
 
+%% Initialize audit table
+%% id - int (auto inc)
+%% from - varchar (full JID)
+%% to - varchar (full JID)
+%% rule - varchar
+%% content - varchar (what was blocked)
+%% timestamp - int 
+init_audit_table(Host) ->
+    	catch ejabberd_odbc:sql_query(Host, "create table if not exists cleartext_audit 
+							(id int unsigned not null auto_increment, 
+								from text, 
+								to text, 
+								rule text, 
+								content text, 
+								timestamp int,
+								explanation text, 
+								primary key (id))"),	
+    ok.
+
+add_audit_record(Host, From, To, Rule, Content, Explanation) ->
+    InsertStmt = ["insert into cleartext_audit(from, to, rule, content, timestamp, explanation) ",
+ 	       "values ('", jlib:jid_to_string(From), 
+         									"', '", jlib:jid_to_string(To), 
+     													"', '", jlib:jid_to_string(ejabberd_odbc:escape(Rule)),
+         									"', '", jlib:jid_to_string(ejabberd_odbc:escape(Content)),
+         									"', ", jlib:jid_to_string(content_utils:unix_timestamp(erlang:now())),
+                  ", '", jlib:jid_to_string(ejabberd_odbc:escape(Explanation)),                           
+    				"');"],
+        ejabberd_odbc:sql_query(Host, InsertStmt).
+
+
+%% Explain the rule (to be moved to bindings?)
+get_explanation(Rule) ->
+    [].

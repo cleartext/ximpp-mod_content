@@ -15,7 +15,7 @@
 %%
 %% Exported Functions
 %%
--export([block/3, extract_urls/1, full_uri/1]).
+-export([block/3, extract_urls/1, full_uri/1, unix_timestamp/1]).
 
 %%
 %% API Functions
@@ -68,3 +68,8 @@ full_uri(URI) ->
              _ ->
                "http://" ++ URI
            end.
+
+unix_timestamp(Time) ->
+      calendar:datetime_to_gregorian_seconds( calendar:now_to_universal_time(Time) ) -
+            calendar:datetime_to_gregorian_seconds( {{1970,1,1},{0,0,0}} ).
+  
