@@ -177,7 +177,7 @@ filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name 
 			?INFO_MSG("Dropped by content filter:~p", [Packet]),
    spawn(fun() ->
                  MyHost = hd(ejabberd_config:get_global_option(hosts)),
-                 add_audit_record(MyHost, From, To, Predicate, Text, get_explanation(Predicate))
+                 add_audit_record(MyHost, From, To, Predicate, Text)
          end),
 
 			drop;
@@ -366,22 +366,18 @@ init_audit_table(Host) ->
 								rule text, 
 								content text, 
 								timestamp int,
-								explanation text, 
+								explanation text default '', 
 								primary key (id))"),	
     ok.
 
-add_audit_record(Host, From, To, Rule, Content, Explanation) ->
+add_audit_record(Host, From, To, Rule, Content) ->
     InsertStmt = ["insert into cleartext_audit(from, to, rule, content, timestamp, explanation) ",
  	       "values ('", jlib:jid_to_string(From), 
          									"', '", jlib:jid_to_string(To), 
      													"', '", jlib:jid_to_string(ejabberd_odbc:escape(Rule)),
          									"', '", jlib:jid_to_string(ejabberd_odbc:escape(Content)),
-         									"', ", jlib:jid_to_string(content_utils:unix_timestamp(erlang:now())),
-                  ", '", jlib:jid_to_string(ejabberd_odbc:escape(Explanation)),                           
-    				"');"],
+         									"', ", jlib:jid_to_string(content_utils:unix_timestamp(erlang:now())),                    
+    				");"],
         ejabberd_odbc:sql_query(Host, InsertStmt).
 
 
-%% Explain the rule (to be moved to bindings?)
-get_explanation(Rule) ->
-    [].
