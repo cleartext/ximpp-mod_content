@@ -359,19 +359,11 @@ to_text(Xmlel) ->
 %% content - varchar (what was blocked)
 %% timestamp - int 
 init_audit_table(Host) ->
-    	catch ejabberd_odbc:sql_query(Host, "create table if not exists cleartext_audit 
-							(id int unsigned not null auto_increment, 
-								from text, 
-								to text, 
-								rule text, 
-								content text, 
-								timestamp int,
-								explanation text default '', 
-								primary key (id))"),	
+    	catch ejabberd_odbc:sql_query(Host, "create table if not exists cleartext_audit   (id int unsigned not null auto_increment, msg_from text, msg_to text, rule text, msg_content text, msg_timestamp int, explanation text, primary key (id))"),	
     ok.
 
 add_audit_record(Host, From, To, Rule, Content) ->
-    InsertStmt = ["insert into cleartext_audit(from, to, rule, content, timestamp, explanation) ",
+    InsertStmt = ["insert into cleartext_audit(msg_from, msg_to, rule, msg_content, msg_timestamp) ",
  	       "values ('", jlib:jid_to_string(From), 
          									"', '", jlib:jid_to_string(To), 
      													"', '", jlib:jid_to_string(ejabberd_odbc:escape(Rule)),
