@@ -363,13 +363,8 @@ init_audit_table(Host) ->
     ok.
 
 add_audit_record(Host, From, To, Rule, Content) ->
-    InsertStmt = ["insert into cleartext_audit(msg_from, msg_to, rule, msg_content, msg_timestamp) ",
- 	       "values ('", jlib:jid_to_string(From), 
-         									"', '", jlib:jid_to_string(To), 
-     													"', '", jlib:jid_to_string(ejabberd_odbc:escape(Rule)),
-         									"', '", jlib:jid_to_string(ejabberd_odbc:escape(Content)),
-         									"', ", jlib:jid_to_string(content_utils:unix_timestamp(erlang:now())),                    
-    				");"],
+    InsertStmt = lists:flatten(io_lib:format("insert into cleartext_audit(msg_from, msg_to, rule, msg_content, msg_timestamp) values ('~s', '~s', '~s', '~s', ~p)",
+                               [jlib:jid_to_string(From), jlib:jid_to_string(To), Rule, Content, content_utils:unix_timestamp(erlang:now())] )),
         ejabberd_odbc:sql_query(Host, InsertStmt).
 
 
