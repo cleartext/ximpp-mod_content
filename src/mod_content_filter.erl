@@ -213,7 +213,7 @@ inspect_message(HostFrom, HostTo, Packet) ->
 	end.
 
 inspect_message(Msg, undefined) ->
-	Msg;
+	{ok, Msg};
 
 inspect_message(Msg, Criteria) ->
     try 
