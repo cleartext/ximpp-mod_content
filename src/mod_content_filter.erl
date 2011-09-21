@@ -12,6 +12,8 @@
 
 -export([start/2, stop/1, filter_packet/1, reload_rules/1]).
 
+%% development 
+-compile(export_all).
 
 %% API
 
