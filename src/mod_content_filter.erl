@@ -173,15 +173,16 @@ filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name 
 	
 	{jid, _, _, _, _, HostFrom, _} = From,		
 	{jid, _, _, _, _, HostTo, _} = To,
-	
-	case inspect_message(HostFrom, HostTo, Packet)  of
-		{drop, Predicate, Text} ->			
-			?INFO_MSG("Dropped by content filter:~p", [Packet]),
-   spawn(fun() ->
-                 MyHost = hd(ejabberd_config:get_global_option(hosts)),
+	MyHost = hd(ejabberd_config:get_global_option(hosts)),
+   AuditFun = fun(Predicate, Text) ->
+                 spawn(fun() ->
                  add_audit_record(MyHost, From, To, Predicate, Text)
-         end),
-
+         								end)
+              end,   
+ 
+	case inspect_message(HostFrom, HostTo, Packet, AuditFun)  of
+		{drop, _Predicate, _Text} ->			
+			?INFO_MSG("Dropped by content filter:~p", [Packet]),
 			drop;
 		{ok, NewMsgBody} ->
 			{From, To, exmpp_xml:xmlel_to_xmlelement(replace_content(Packet, NewMsgBody))}
@@ -191,7 +192,7 @@ filter_packet(P) ->
 	?DEBUG("Filter packet:~p~n", [P]),
 	P.
 
-inspect_message(HostFrom, HostTo, Packet) ->
+inspect_message(HostFrom, HostTo, Packet, AuditFun) ->
 	OutCriteria = get_criteria(HostFrom, ?OUTBOUND),
 	MsgBody = to_text(exmpp_xml:get_element(Packet ,"body")),
 	HtmlBody = case exmpp_xml:get_element(exmpp_xml:get_element(Packet, "html"),
@@ -203,19 +204,19 @@ inspect_message(HostFrom, HostTo, Packet) ->
 							 undefined -> undefined;
 							 X -> to_text(exmpp_xml:get_element(X, "text"))
 						 end,					 		
-	R1 = inspect_message([{msg, MsgBody}, {html, HtmlBody}, {text, TextBody}], OutCriteria),
+	R1 = inspect_message([{msg, MsgBody}, {html, HtmlBody}, {text, TextBody}], OutCriteria, AuditFun),
 	case R1 of
 		{ok, NewMsg} -> 
 			InCriteria = get_criteria(HostTo, ?INBOUND),
-			inspect_message(NewMsg, InCriteria);
+			inspect_message(NewMsg, InCriteria, AuditFun);
   Drop ->
       Drop
 	end.
 
-inspect_message(Msg, undefined) ->
+inspect_message(Msg, undefined, _AuditFun) ->
 	{ok, Msg};
 
-inspect_message(Msg, Criteria) ->
+inspect_message(Msg, Criteria, AuditFun) ->
     try 
 	NewMsg = lists:foldl(
 					fun({Predicate, CrFun}, AccMsg) -> 												 
@@ -227,10 +228,12 @@ inspect_message(Msg, Criteria) ->
 											FilteredText = 
 												try CrFun(Text) of 
 													drop -> 
+														AuditFun(Predicate, Text),
 														throw({drop, Predicate, Text});
 													keep ->
 														Text;
 													{keep, NewText} ->
+              AuditFun(Predicate, Text),   
 														NewText
 												catch
 													_Err:Reason ->
@@ -366,7 +369,9 @@ init_audit_table(Host) ->
 
 add_audit_record(Host, From, To, Rule, Content) ->
     InsertStmt = lists:flatten(io_lib:format("insert into cleartext_audit(msg_from, msg_to, rule, msg_content, msg_timestamp) values ('~s', '~s', '~s', '~s', ~p)",
-                               [jlib:jid_to_string(From), jlib:jid_to_string(To), Rule, Content, content_utils:unix_timestamp(erlang:now())] )),
+                               [jlib:jid_to_string(From), jlib:jid_to_string(To), format_rule(Rule), Content, content_utils:unix_timestamp(erlang:now())] )),
         ejabberd_odbc:sql_query(Host, InsertStmt).
 
-
+%%
+format_rule({Name, Data, Action, Direction} = _Rule) ->
+    lists:flatten(io_lib:format("~s,~p,~s,~s", [Name, Data, Action, Direction])).
