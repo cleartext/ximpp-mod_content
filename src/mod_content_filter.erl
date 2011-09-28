@@ -233,7 +233,12 @@ inspect_message(Msg, Criteria, AuditFun) ->
 													keep ->
 														Text;
 													{keep, NewText} ->
-              AuditFun(Predicate, Text),   
+              case NewText /= Text of
+                  true ->
+                      AuditFun(Predicate, Text);
+                  false ->
+                      void
+              end,   
 														NewText
 												catch
 													_Err:Reason ->
