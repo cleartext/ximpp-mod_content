@@ -165,7 +165,7 @@ test() ->
                end, URLs).
 
 url_check(Msg, Rule, Action, _Direction, Host) ->  
-  URLs = brightcloud_utils:extract_urls(Msg),
+  URLs = content_utils:extract_urls(Msg),
   case URLs of
     [] -> {keep, Msg};
     _ ->
