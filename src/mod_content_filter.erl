@@ -169,18 +169,9 @@ get_filter_name(Host) ->
 	list_to_atom(A ++ "_" ++ Host).
 
 filter_packet({From, To,  {xmlelement, Name, _Attrs, _Els} = Packet}) when Name == "message" ->
-	?DEBUG("Packet, From, To:~p~n, ~p~n, ~p~n", [Packet, From, To]),
-	
-	{jid, _, _, _, _, HostFrom, _} = From,		
-	{jid, _, _, _, _, HostTo, _} = To,
-	MyHost = hd(ejabberd_config:get_global_option(hosts)),
-   AuditFun = fun(Predicate, Text) ->
-                 spawn(fun() ->
-                 add_audit_record(MyHost, From, To, Predicate, Text)
-         								end)
-              end,   
+	?DEBUG("Packet, From, To:~p~n, ~p~n, ~p~n", [Packet, From, To]),	
  
-	case inspect_message(HostFrom, HostTo, Packet, AuditFun)  of
+	case inspect_message(From, To, Packet)  of
 		{drop, _Predicate, _Text} ->			
 			?INFO_MSG("Dropped by content filter:~p", [Packet]),
 			drop;
@@ -192,7 +183,10 @@ filter_packet(P) ->
 	?DEBUG("Filter packet:~p~n", [P]),
 	P.
 
-inspect_message(HostFrom, HostTo, Packet, AuditFun) ->
+inspect_message(From, To, Packet, AuditFun) ->
+ 	{jid, _, _, _, _, HostFrom, _} = From,		
+	 {jid, _, _, _, _, HostTo, _} = To,
+    
 	OutCriteria = get_criteria(HostFrom, ?OUTBOUND),
 	MsgBody = to_text(exmpp_xml:get_element(Packet ,"body")),
 	HtmlBody = case exmpp_xml:get_element(exmpp_xml:get_element(Packet, "html"),
@@ -204,11 +198,23 @@ inspect_message(HostFrom, HostTo, Packet, AuditFun) ->
 							 undefined -> undefined;
 							 X -> to_text(exmpp_xml:get_element(X, "text"))
 						 end,					 		
-	R1 = inspect_message([{msg, MsgBody}, {html, HtmlBody}, {text, TextBody}], OutCriteria, AuditFun),
+	R1 = inspect_message([{msg, MsgBody}, {html, HtmlBody}, {text, TextBody}], OutCriteria, 
+										fun(Predicate, Text) ->
+                 spawn(fun() ->
+                 add_audit_record(HostFrom, From, To, Predicate, Text)
+         								end)
+              end
+                      ),
 	case R1 of
 		{ok, NewMsg} -> 
 			InCriteria = get_criteria(HostTo, ?INBOUND),
-			inspect_message(NewMsg, InCriteria, AuditFun);
+			inspect_message(NewMsg, InCriteria, 
+                   fun(Predicate, Text) ->
+                 spawn(fun() ->
+                 		add_audit_record(HostTo, From, To, Predicate, Text)
+         								end)
+              					end
+                   );
   Drop ->
       Drop
 	end.
