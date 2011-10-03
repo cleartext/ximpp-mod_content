@@ -183,7 +183,7 @@ filter_packet(P) ->
 	?DEBUG("Filter packet:~p~n", [P]),
 	P.
 
-inspect_message(From, To, Packet, AuditFun) ->
+inspect_message(From, To, Packet) ->
  	{jid, _, _, _, _, HostFrom, _} = From,		
 	 {jid, _, _, _, _, HostTo, _} = To,
     
@@ -198,7 +198,7 @@ inspect_message(From, To, Packet, AuditFun) ->
 							 undefined -> undefined;
 							 X -> to_text(exmpp_xml:get_element(X, "text"))
 						 end,					 		
-	R1 = inspect_message([{msg, MsgBody}, {html, HtmlBody}, {text, TextBody}], OutCriteria, 
+	R1 = inspect_message1([{msg, MsgBody}, {html, HtmlBody}, {text, TextBody}], OutCriteria, 
 										fun(Predicate, Text) ->
                  spawn(fun() ->
                  add_audit_record(HostFrom, From, To, Predicate, Text)
@@ -208,7 +208,7 @@ inspect_message(From, To, Packet, AuditFun) ->
 	case R1 of
 		{ok, NewMsg} -> 
 			InCriteria = get_criteria(HostTo, ?INBOUND),
-			inspect_message(NewMsg, InCriteria, 
+			inspect_message1(NewMsg, InCriteria, 
                    fun(Predicate, Text) ->
                  spawn(fun() ->
                  		add_audit_record(HostTo, From, To, Predicate, Text)
@@ -219,10 +219,10 @@ inspect_message(From, To, Packet, AuditFun) ->
       Drop
 	end.
 
-inspect_message(Msg, undefined, _AuditFun) ->
+inspect_message1(Msg, undefined, _AuditFun) ->
 	{ok, Msg};
 
-inspect_message(Msg, Criteria, AuditFun) ->
+inspect_message1(Msg, Criteria, AuditFun) ->
     try 
 	NewMsg = lists:foldl(
 					fun({Predicate, CrFun}, AccMsg) -> 												 
